@@ -2,9 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+<meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Book My Seat</title>
     <link rel="icon" type="image/svg+xml" href="./assets/book-my-seat-mark.svg" />
+    <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
     <style>
       * {
         box-sizing: border-box;
@@ -3091,6 +3093,34 @@
         margin: 0;
         accent-color: #2563eb;
       }
+      #passengers .passenger .passenger-gender {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        min-width: 0;
+      }
+      #passengers .passenger-gender-label { color: #46546a; font-size: 13px; font-weight: 650; }
+      #passengers .passenger-gender-options { display: flex; gap: 6px; min-height: 46px; }
+      #passengers .passenger-gender-option {
+        flex: 1 1 0;
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        padding: 0 7px;
+        border: 1px solid #d7dee8;
+        border-radius: 11px;
+        background: #fff;
+        color: #475569;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+        transition: background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+      }
+      #passengers .passenger-gender-option .gender-icon { font-size: 16px; line-height: 1; }
+      #passengers .passenger-gender-option.selected { border-color: #b91c1c; background: #fff1f2; color: #b91c1c; box-shadow: 0 0 0 2px rgba(185,28,28,.1); }
+      #passengers .passenger-gender-option:active { transform: scale(.97); }
       #reviewRouteSummary {
         display: flex;
         flex-wrap: wrap;
@@ -3171,6 +3201,18 @@
         min-height: 50px;
         margin: 14px 0 0;
         border-radius: 14px !important;
+      }
+      #searchForm button[type="submit"], #results button, #seatPanel > button,
+      #passengerPanel > button, #passengerForm > button[type="submit"], #reviewPanel > button,
+      #reviewForm button, #ticketPanel button {
+        background: linear-gradient(135deg, #b91c1c, #e34242) !important;
+        border-color: #b91c1c !important;
+        color: #fff !important;
+      }
+      #searchForm button[type="submit"]:hover, #results button:hover, #seatPanel > button:hover,
+      #passengerPanel > button:hover, #passengerForm > button[type="submit"]:hover,
+      #reviewPanel > button:hover, #reviewForm button:hover, #ticketPanel button:hover {
+        filter: brightness(1.05);
       }
       @media (max-width: 720px) {
         #reviewDetails { grid-template-columns: minmax(0, 1fr); }
@@ -4339,6 +4381,32 @@
         line-height: 1;
         cursor: pointer;
       }
+      .booking-popup-message {
+        position: fixed;
+        z-index: 20000;
+        top: calc(env(safe-area-inset-top, 0px) + 12px);
+        left: 50%;
+        width: min(460px, calc(100vw - 28px));
+        box-sizing: border-box;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 13px 15px;
+        border: 1px solid #bfdbfe;
+        border-radius: 14px;
+        background: #eff6ff;
+        color: #1e3a5f;
+        box-shadow: 0 12px 36px rgba(15, 23, 42, .2);
+        font-size: 14px;
+        line-height: 1.45;
+        opacity: 0;
+        transform: translate(-50%, -10px);
+        transition: opacity .18s ease, transform .18s ease;
+      }
+      .booking-popup-message.visible { opacity: 1; transform: translate(-50%, 0); }
+      .booking-popup-message.error { border-color: #fecaca; background: #fff1f2; color: #991b1b; }
+      .booking-popup-message .popup-mark { flex: 0 0 auto; font-weight: 800; }
+      .booking-popup-message .popup-copy { overflow-wrap: anywhere; }
       #adminOverviewPnrCard {
         margin: 0 !important;
         padding: 20px 22px !important;
@@ -5052,7 +5120,7 @@
       <section id="passengerPanel" hidden>
         <button id="passengerBackBtn" class="booking-step-back" type="button" aria-label="Back to seat selection" title="Back to seat selection">←</button>
         <h2>Passenger Details</h2>
-        <p class="passenger-panel-intro">Enter the details for each selected seat. The first passenger’s mobile number will be used as the booking contact.</p>
+        <p class="passenger-panel-intro">Enter each passenger’s name, age and gender. Your account contact details are used for the booking.</p>
         <form id="passengerForm">
           <div id="passengers"></div>
           <button type="submit">Continue to Trip Details</button>
@@ -5067,9 +5135,9 @@
           <label for="paymentMethod">Select Payment Method</label>
           <select id="paymentMethod" required>
             <option value="cash" selected>Cash (Pay to Bus Operator)</option>
-            <option value="upi">UPI (Pay to Bus Operator)</option>
+            <option value="upi">UPI · Cashfree</option>
           </select>
-          <p class="review-payment-note">Payment will not be collected on the website. The selected method will be shared with the bus operator.</p>
+          <p class="review-payment-note">Cash booking remains Unpaid until the bus operator collects cash. UPI checkout is secured by Cashfree; the ticket is confirmed only after server-side payment verification.</p>
           <button id="confirmBookingBtn" type="submit">Book Ticket</button>
         </form>
       </section>
@@ -5462,11 +5530,16 @@
                 <label>Bus Number</label><input id="currentBusNumber" />
                 <label>Bus Type</label
                 ><select id="currentBusType">
-                  <option>AC Seater</option>
                   <option>Non AC Seater</option>
-                  <option>AC Sleeper</option>
-                  <option>Non AC Sleeper</option>
+                  <option>Non AC Seater + Sleeper</option>
+                  <option>AC Seater</option>
+                  <option>AC Seater + Sleeper</option>
                 </select>
+                <label>Seat layout</label><select id="currentBusLayout"></select>
+                <div id="currentBusDeckLayouts" hidden>
+                  <label>Lower deck layout</label><select id="currentBusLowerLayout"><option>2x2</option><option>2x3</option><option>3x3</option></select>
+                  <label id="currentBusUpperLayoutLabel">Upper deck layout</label><select id="currentBusUpperLayout"><option>2x2</option><option>2x3</option><option>3x3</option></select>
+                </div>
                 <label>Total Seats</label
                 ><input
                   id="currentBusSeats"
@@ -5539,6 +5612,8 @@
                 ><select id="currentTripRoute" required></select>
                 <label>Journey Date</label
                 ><input id="currentTripDate" type="date" required />
+                <label>Bus departure time</label><input id="currentTripDeparture" type="time" required />
+                <label>Final stop arrival time</label><input id="currentTripArrival" type="time" required />
                 <button type="submit">Create Trip & Copy Stoppages</button>
               </form>
               <div id="currentTripsAdmin"></div>
@@ -5712,6 +5787,10 @@
           if (bar) bar.classList.remove("active");
         }
         window.fetch = function (...args) {
+          const requestUrl=String(args[0]?.url||args[0]||"");
+          // Typeahead requests are intentionally quiet; a full-screen network
+          // overlay while a customer types looks like the page is refreshing.
+          if(requestUrl.includes("/rpc/app_search_stop_names"))return nativeFetch(...args);
           pending++;
           if (pending === 1) {
             startedAt = Date.now();
@@ -6263,8 +6342,7 @@
           people: passengers.map((person) => ({
             name: String(person.name || ""),
             age: Number(person.age || 0),
-            phone: String(person.phone || ""),
-            is_disabled: person.is_disabled === true,
+            gender: String(person.gender || ""),
           })),
           total: Number(row.total_fare || 0),
           paymentMethod: row.payment_method || "cash",
@@ -6597,6 +6675,37 @@
       function findBus(id) {
         return buses.find((b) => String(b.id) === String(id));
       }
+      let restoringAppNavigation = false;
+      function recordAppNavigation(panel, tab) {
+        if (restoringAppNavigation) return;
+        const current = history.state;
+        if (current?.bookMySeatNavigation && current.panel === panel) return;
+        try { history.pushState({ bookMySeatNavigation: true, panel, tab }, "", window.location.href); } catch (_) {}
+      }
+      function replaceAppNavigation(panel, tab) {
+        try { history.replaceState({ bookMySeatNavigation: true, panel, tab }, "", window.location.href); } catch (_) {}
+      }
+      function restoreAppNavigation(state) {
+        if (!state?.bookMySeatNavigation || !state.panel) return;
+        restoringAppNavigation = true;
+        try {
+          const tab = state.tab || (state.panel === "dashboardPanel" ? "customerTab" : state.panel.startsWith("admin") ? "adminTab" : "bookTab");
+          saveActiveTab(tab);
+          if (state.panel === "searchPanel") { showCustomer(); return; }
+          if (state.panel === "dashboardPanel") { showDashboard(); return; }
+          if (state.panel === "adminPanel" || state.panel === "adminLoginPanel") { showAdmin(); return; }
+          ["searchPanel", "results", "seatPanel", "passengerPanel", "reviewPanel", "ticketPanel", "dashboardPanel", "adminPanel", "adminLoginPanel", "authPanel", "pnrPanel"].forEach((id) => { const element = $(id); if (element) element.hidden = true; });
+          const target = $(state.panel);
+          if (target) target.hidden = false;
+          if (["results", "seatPanel", "passengerPanel", "reviewPanel", "ticketPanel"].includes(state.panel)) $("searchPanel").hidden = true;
+          window.scrollTo({ top: 0, behavior: "instant" });
+        } finally { restoringAppNavigation = false; }
+      }
+      function navigateAppBack(fallback) {
+        if (history.state?.bookMySeatNavigation) { history.back(); return; }
+        fallback();
+      }
+      window.addEventListener("popstate", (event) => restoreAppNavigation(event.state));
       function saveActiveTab(tabName) {
         // Keep one canonical value in storage while accepting older saved values.
         const canonicalTab =
@@ -6616,6 +6725,7 @@
           sessionStorage.removeItem(BOOKING_AUTH_RETURN_KEY);
         } catch (_) {}
         saveActiveTab("bookTab");
+        recordAppNavigation("searchPanel", "bookTab");
         ["searchPanel", "pnrPanel"].forEach((id) => {
           $(id).hidden = false;
         });
@@ -6637,10 +6747,11 @@
       function showDashboard() {
         saveActiveTab("customerTab");
         if (!readDemoAuthSession()) {
-          showCustomer();
+          recordAppNavigation("authPanel", "customerTab");
           openDemoAuth();
           return;
         }
+        recordAppNavigation("dashboardPanel", "customerTab");
         [
           "searchPanel",
           "results",
@@ -6685,6 +6796,7 @@
         });
         const adminLoginPanel = $("adminLoginPanel");
         if (!adminLoggedIn) {
+          recordAppNavigation("adminLoginPanel", "adminTab");
           $("adminPanel").hidden = true;
           if (adminLoginPanel) {
             adminLoginPanel.hidden = false;
@@ -6694,6 +6806,7 @@
         if (adminLoginPanel) {
           adminLoginPanel.hidden = true;
         }
+        recordAppNavigation("adminPanel", "adminTab");
         $("adminPanel").hidden = false;
         renderAdmin();
       }
@@ -6852,7 +6965,7 @@
         const people = [...$("passengers").children].map((box) => ({
           name: box.querySelector('[name="name"]').value.trim(),
           age: Number(box.querySelector('[name="age"]').value),
-          phone: box.querySelector('[name="phone"]').value.trim(),
+          gender: box.querySelector('[name="gender"]')?.value || "",
         }));
         if (
           people.some(
@@ -6861,7 +6974,7 @@
               !Number.isInteger(p.age) ||
               p.age < 1 ||
               p.age > 120 ||
-              !/^[6-9][0-9]{9}$/.test(p.phone),
+              !["male", "female", "other"].includes(p.gender),
           )
         ) {
           alert("Check the passenger details.");
@@ -6878,7 +6991,7 @@
             p_journey_date: journeyDate,
             p_seats: [...seats].sort((a, b) => a - b),
             p_customer_name: people[0].name,
-            p_customer_phone: people[0].phone,
+            p_customer_phone: readDemoAuthSession()?.user?.user_metadata?.mobile || readDemoAuthSession()?.user?.user_metadata?.phone || "",
             p_customer_email: readDemoAuthSession()?.email || null,
             p_passenger_details: people,
           });
@@ -6990,7 +7103,7 @@
         return (
           {
             cash: "Cash – Pay to Bus Operator",
-            upi: "UPI – Pay to Bus Operator",
+            upi: "UPI – Cashfree",
             pay_later: "Cash – Pay to Bus Operator",
           }[value] || "Cash – Pay to Bus Operator"
         );
@@ -6998,6 +7111,7 @@
       function paymentStatusLabel(value) {
         return (
           {
+            unpaid: "UNPAID – Pay to Bus Operator",
             pending: "PENDING – Payment Due",
             paid: "PAID",
             refunded: "REFUNDED",
@@ -7091,12 +7205,8 @@
           passengerMeta.className = "ticket-passenger-meta";
           addText("p", "Age", passengerMeta);
           addText("strong", p.age || "—", passengerMeta);
-          addText("p", "Mobile", passengerMeta);
-          addText("strong", p.phone || "—", passengerMeta);
-          if (p.is_disabled === true) {
-            addText("p", "PwD status", passengerMeta);
-            addText("strong", "Yes", passengerMeta);
-          }
+          addText("p", "Gender", passengerMeta);
+          addText("strong", p.gender ? p.gender[0].toUpperCase() + p.gender.slice(1) : "—", passengerMeta);
           box.appendChild(passengerMeta);
           ticket.appendChild(box);
         });
@@ -7317,6 +7427,7 @@
 
       $("ticketBackBtn").onclick = function () {
         if ($("ticketPanel").dataset.newBookingConfirmation === "true") {
+          if (history.state?.bookMySeatNavigation) { history.back(); return; }
           delete $("ticketPanel").dataset.newBookingConfirmation;
           $("ticketPanel").hidden = true;
           showCustomer();
@@ -9445,32 +9556,14 @@
           }
         })();
       })();
-      // Restore the saved tab only after the customer auth click handler exists.
-      // This avoids the first refresh opening My Account and a later refresh
-      // falling back to the booking tab due to initialization order.
+      // Every fresh page entry starts at New Ticket; browser history keeps the
+      // tabs and booking steps visited during this page session.
       (function restoreActiveTabAfterAuthInit() {
-        let activeTab = "bookTab";
-        try {
-          activeTab = localStorage.getItem("apniBus_activeTab") || "bookTab";
-        } catch (_) {}
-
-        if (
-          activeTab === "customerTab" ||
-          activeTab === "dashboard" ||
-          activeTab === "accountTab"
-        ) {
-          const tab = document.getElementById("customerTab");
-          if (tab) tab.click();
-        } else if (
-          activeTab === "adminTab" ||
-          activeTab === "adminPanel" ||
-          activeTab === "admin"
-        ) {
-          // Admin tab is restored by initAdminAuth after its handlers exist.
-        } else {
-          const tab = document.getElementById("bookTab");
-          if (tab) tab.click();
-        }
+        try { localStorage.setItem("apniBus_activeTab", "bookTab"); } catch (_) {}
+        restoringAppNavigation = true;
+        showCustomer();
+        restoringAppNavigation = false;
+        replaceAppNavigation("searchPanel", "bookTab");
       })();
       /* ADMIN LOGIN / LOGOUT — SUPABASE AUTH */
       (function initAdminAuth() {
@@ -9932,7 +10025,12 @@
                 $a("currentBusOperator").value = x.operator_id || "";
                 $a("currentBusName").value = x.bus_name || "";
                 $a("currentBusNumber").value = x.bus_number || "";
-                $a("currentBusType").value = x.bus_type || "Non AC Seater";
+                $a("currentBusType").value = x.bus_type === "AC Sleeper" ? "AC Seater + Sleeper" : x.bus_type === "Non AC Sleeper" ? "Non AC Seater + Sleeper" : x.bus_type || "Non AC Seater";
+                updateAdminBusLayouts();
+                const savedLayout=x.seat_layout||"2x2";
+                if(savedLayout.startsWith("single_deck:")){ $a("currentBusLayout").value="Single Deck"; $a("currentBusLowerLayout").value=savedLayout.split(":")[1]||"2x2"; }
+                else if(savedLayout.startsWith("double_deck:")){ const parts=savedLayout.split(":"); $a("currentBusLayout").value="Double Deck"; $a("currentBusLowerLayout").value=parts[1]||"2x2"; $a("currentBusUpperLayout").value=parts[2]||"2x2"; }
+                else $a("currentBusLayout").value=savedLayout;
                 $a("currentBusSeats").value = x.total_seats || 40;
                 $a("currentBusForm").scrollIntoView({ behavior: "smooth" });
               } else if (id === "currentRoutes") {
@@ -10659,6 +10757,13 @@ if (recentContainer) {
           ).textContent = "Add Operator";
           msg("Operator saved.");
         });
+        function updateAdminBusLayouts(){
+          const combo=$a("currentBusType").value.includes("Sleeper"), select=$a("currentBusLayout");
+          select.replaceChildren(...(combo?["Single Deck","Double Deck"]:["2x2","2x3"]).map(v=>{const o=document.createElement("option");o.textContent=v;return o;}));
+          $a("currentBusDeckLayouts").hidden=!combo;
+          const showUpper=combo&&select.value==="Double Deck";$a("currentBusUpperLayoutLabel").hidden=!showUpper;$a("currentBusUpperLayout").hidden=!showUpper;
+        }
+        $a("currentBusType").addEventListener("change",updateAdminBusLayouts);$a("currentBusLayout").addEventListener("change",updateAdminBusLayouts); updateAdminBusLayouts();
         bind("currentBusForm", async () => {
           const payload = {
             operator_id: $a("currentBusOperator").value,
@@ -10666,6 +10771,9 @@ if (recentContainer) {
             bus_number: $a("currentBusNumber").value.trim() || null,
             bus_type: $a("currentBusType").value,
             total_seats: Number($a("currentBusSeats").value),
+            seat_layout: $a("currentBusType").value.includes("Sleeper")
+              ? ($a("currentBusLayout").value === "Double Deck" ? `double_deck:${$a("currentBusLowerLayout").value}:${$a("currentBusUpperLayout").value}` : `single_deck:${$a("currentBusLowerLayout").value}`)
+              : $a("currentBusLayout").value,
           };
           await req(
             editingBusRecordId
@@ -10738,6 +10846,13 @@ if (recentContainer) {
               "Add at least two stops to the route before creating a trip.",
             );
           const date = $a("currentTripDate").value;
+          const departure=$a("currentTripDeparture").value, finalArrival=$a("currentTripArrival").value;
+          if(!departure||!finalArrival)throw Error("Set the bus departure and final stop arrival times.");
+          const toMinutes=(value)=>{const [h,m]=value.split(":").map(Number);return h*60+m;};
+          const startMinute=toMinutes(departure);let endMinute=toMinutes(finalArrival);if(endMinute<startMinute)endMinute+=1440;
+          const actualDuration=endMinute-startMinute,totalSegmentMinutes=stops.reduce((sum,s)=>sum+Number(s.segment_minutes||0),0),totalDistance=stops.reduce((sum,s)=>sum+Number(s.distance_km||0),0);
+          let elapsedMinutes=0,elapsedDistance=0;
+          const formatTripTime=(minute)=>{const wrapped=((minute%1440)+1440)%1440;return String(Math.floor(wrapped/60)).padStart(2,"0")+":"+String(wrapped%60).padStart(2,"0")+":00";};
           const created = await req("app_trips", {
             method: "POST",
             body: JSON.stringify({
@@ -10752,16 +10867,21 @@ if (recentContainer) {
             await req("app_trip_stops", {
               method: "POST",
               body: JSON.stringify(
-                stops.map((s) => ({
+                stops.map((s,index) => {
+                  if(index>0){elapsedMinutes+=Number(s.segment_minutes||0);elapsedDistance+=Number(s.distance_km||0);}
+                  const last=index===stops.length-1;
+                  let intermediateTime=null;
+                  if(index>0&&!last){const fraction=totalSegmentMinutes>0?elapsedMinutes/totalSegmentMinutes:totalDistance>0?elapsedDistance/totalDistance:index/(stops.length-1);intermediateTime=formatTripTime(startMinute+Math.round(actualDuration*fraction));}
+                  return {
                   trip_id: trip.id,
                   original_stop_id: s.id,
                   stop_order: s.stop_order,
                   stop_name: s.stop_name,
-                  arrival_time: s.arrival_time,
-                  departure_time: s.departure_time,
+                  arrival_time: index===0 ? s.arrival_time : last ? finalArrival : intermediateTime,
+                  departure_time: index===0 ? departure : last ? s.departure_time : intermediateTime,
                   distance_km: Number(s.distance_km || 0),
                   segment_minutes: Number(s.segment_minutes || 0),
-                })),
+                };}),
               ),
             });
           } catch (e) {
@@ -10919,6 +11039,7 @@ if (recentContainer) {
           currentBookedSegments = [],
           reviewPeople = [],
           passengerSeatKey = "";
+        let bookingPopupTimer = null;
         let currentBoarding = null,
           currentDropping = null,
           currentFare = 0;
@@ -10961,6 +11082,45 @@ if (recentContainer) {
           }
           if (!r.ok) throw new Error(d?.message || d?.details || String(d));
           return d;
+        }
+        async function cashfreeFunction(name, payload) {
+          const auth = readDemoAuthSession();
+          if (!auth?.access_token) throw new Error("Please sign in again before paying.");
+          const response = await fetch(SUPABASE_URL.replace(/\/$/, "") + "/functions/v1/" + name, {
+            method: "POST",
+            headers: {
+              apikey: SUPABASE_PUBLISHABLE_KEY,
+              Authorization: "Bearer " + auth.access_token,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload || {}),
+          });
+          const raw = await response.text();
+          let data = {};
+          try { data = raw ? JSON.parse(raw) : {}; } catch { data = { error: raw }; }
+          if (!response.ok) throw new Error(data.error || data.message || data.details || "Cashfree payment request failed.");
+          return data;
+        }
+        function showBookingPopup(message, isError = false) {
+          if (bookingPopupTimer) clearTimeout(bookingPopupTimer);
+          document.querySelectorAll(".booking-popup-message").forEach((node) => node.remove());
+          const popup = document.createElement("div");
+          popup.className = "booking-popup-message" + (isError ? " error" : "");
+          popup.setAttribute("role", isError ? "alert" : "status");
+          popup.setAttribute("aria-live", "polite");
+          const mark = document.createElement("span");
+          mark.className = "popup-mark";
+          mark.textContent = isError ? "!" : "✓";
+          const copy = document.createElement("span");
+          copy.className = "popup-copy";
+          copy.textContent = message;
+          popup.append(mark, copy);
+          document.body.appendChild(popup);
+          requestAnimationFrame(() => popup.classList.add("visible"));
+          bookingPopupTimer = setTimeout(() => {
+            popup.classList.remove("visible");
+            setTimeout(() => popup.remove(), 200);
+          }, 2000);
         }
         const esc = (v) => encodeURIComponent(String(v));
         const stopTime = (stop, field) => stop?.[field] || "—";
@@ -11069,10 +11229,10 @@ if (recentContainer) {
         // Replace current search with trip/date/route search.
         const stopSuggestionCache = new Map();
         const stopSuggestionList = q("stopSuggestions");
-        let stopSuggestionTimer = null;
+        const stopSuggestionTimers = new WeakMap();
         [q("from"), q("to")].forEach((field) => field.addEventListener("input", () => {
           const query = field.value.trim();
-          clearTimeout(stopSuggestionTimer);
+          clearTimeout(stopSuggestionTimers.get(field));
           if (query.length < 2) { stopSuggestionList.replaceChildren(); return; }
           const cached = stopSuggestionCache.get(query.toLowerCase());
           if (cached) {
@@ -11081,7 +11241,7 @@ if (recentContainer) {
             }));
             return;
           }
-          stopSuggestionTimer = setTimeout(async () => {
+          stopSuggestionTimers.set(field,setTimeout(async () => {
             try {
               const rows = await rpc("app_search_stop_names", { p_query: query, p_limit: 12 });
               const names = (Array.isArray(rows) ? rows : []).map((item) => typeof item === "string" ? item : item.stop_name).filter(Boolean);
@@ -11091,7 +11251,7 @@ if (recentContainer) {
                 const option = document.createElement("option"); option.value = name; return option;
               }));
             } catch (_) { /* Suggestions can load again when the connection returns. */ }
-          }, 140);
+          }, 220));
         }));
 
         q("searchForm").onsubmit = async function (e) {
@@ -11108,15 +11268,13 @@ if (recentContainer) {
             t = q("to").value.trim(),
             date = q("date").value;
           if (!f || !t || f.toLowerCase() === t.toLowerCase() || !date) {
-            alert("Enter a valid origin, destination, and journey date.");
+            showBookingPopup("Enter a valid origin, destination, and journey date.", true);
             return;
           }
           if (date < today()) {
             q("date").value = "";
             q("journeyDateLabel").textContent = "Select your journey date";
-            alert(
-              "Bookings cannot be made for past dates. Choose today or a future date.",
-            );
+            showBookingPopup("Bookings cannot be made for past dates. Choose today or a future date.", true);
             return;
           }
           from = f;
@@ -11129,21 +11287,18 @@ if (recentContainer) {
               rest(`/app_trips?select=id,route_id,bus_id,journey_date,status&journey_date=eq.${esc(date)}&status=eq.scheduled&order=created_at.asc`),
               rest("/app_operators?select=id,operator_name,active&active=eq.true&order=operator_name").catch(() => []),
             ]);
+            const tripIds=trips.map((x)=>x.id).filter(Boolean),busIds=[...new Set(trips.map((x)=>x.bus_id).filter(Boolean))];
+            const tripFilter=esc("("+tripIds.join(",")+")"),busFilter=esc("("+busIds.join(",")+")");
+            const [busRows,allStops,allFares]=tripIds.length?await Promise.all([
+              rest(`/app_buses?select=id,operator_id,bus_name,bus_number,bus_type,total_seats,seat_layout,active&id=in.${busFilter}&active=eq.true`),
+              rest(`/app_trip_stops?select=id,trip_id,stop_order,stop_name,arrival_time,departure_time&trip_id=in.${tripFilter}&order=trip_id.asc,stop_order.asc`),
+              rest(`/app_trip_fares?select=trip_id,boarding_stop_id,dropping_stop_id,fare&trip_id=in.${tripFilter}`),
+            ]):[[],[],[]];
             const cards = [];
             for (const trip of trips) {
-              const [busRows, stops, fares] = await Promise.all([
-                rest(
-                  `/app_buses?select=id,operator_id,bus_name,bus_number,bus_type,total_seats,active&id=eq.${esc(trip.bus_id)}&active=eq.true`,
-                ),
-                rest(
-                  `/app_trip_stops?select=id,stop_order,stop_name,arrival_time,departure_time&trip_id=eq.${esc(trip.id)}&order=stop_order.asc`,
-                ),
-                rest(
-                  `/app_trip_fares?select=boarding_stop_id,dropping_stop_id,fare&trip_id=eq.${esc(trip.id)}`,
-                ),
-              ]);
-              const b = busRows[0];
+              const b = busRows.find((x)=>String(x.id)===String(trip.bus_id));
               if (!b) continue;
+              const stops=allStops.filter((x)=>String(x.trip_id)===String(trip.id)),fares=allFares.filter((x)=>String(x.trip_id)===String(trip.id));
               const bi = stops.findIndex(
                 (x) => x.stop_name.trim().toLowerCase() === f.toLowerCase(),
               );
@@ -11224,6 +11379,7 @@ if (recentContainer) {
           q("passengerPanel").hidden = true;
           q("reviewPanel").hidden = true;
           q("ticketPanel").hidden = true;
+          recordAppNavigation("results", "bookTab");
           q("results").scrollIntoView({ behavior: "smooth" });
         };
         async function openTrip(item, card) {
@@ -11311,38 +11467,30 @@ if (recentContainer) {
           q("reviewPanel").hidden = true;
           q("ticketPanel").hidden = true;
           q("results").insertAdjacentElement("afterend", q("seatPanel"));
+          recordAppNavigation("seatPanel", "bookTab");
           q("seatPanel").scrollIntoView({ behavior: "smooth" });
         }
         q("resultsBackBtn").onclick = function () {
-          q("results").hidden = true;
-          q("searchPanel").hidden = false;
-          q("pnrPanel").hidden = false;
-          q("searchPanel").scrollIntoView({ behavior: "smooth" });
+          navigateAppBack(() => { q("results").hidden = true;q("searchPanel").hidden = false;q("pnrPanel").hidden = false;q("searchPanel").scrollIntoView({ behavior: "smooth" }); });
         };
         q("seatBackBtn").onclick = function () {
-          q("seatPanel").hidden = true;
-          q("results").hidden = false;
-          q("results").scrollIntoView({ behavior: "smooth" });
+          navigateAppBack(() => { q("seatPanel").hidden = true;q("results").hidden = false;q("results").scrollIntoView({ behavior: "smooth" }); });
         };
         q("passengerBackBtn").onclick = function () {
-          q("passengerPanel").hidden = true;
-          q("seatPanel").hidden = false;
-          q("seatPanel").scrollIntoView({ behavior: "smooth" });
+          navigateAppBack(() => { q("passengerPanel").hidden = true;q("seatPanel").hidden = false;q("seatPanel").scrollIntoView({ behavior: "smooth" }); });
         };
         q("reviewBackBtn").onclick = function () {
-          q("reviewPanel").hidden = true;
-          q("passengerPanel").hidden = false;
-          q("passengerPanel").scrollIntoView({ behavior: "smooth" });
+          navigateAppBack(() => { q("reviewPanel").hidden = true;q("passengerPanel").hidden = false;q("passengerPanel").scrollIntoView({ behavior: "smooth" }); });
         };
         q("continueBtn").onclick = function () {
           if (!currentTrip || !seats.length) {
-            alert("Select a seat first.");
+            showBookingPopup("Select a seat first.", true);
             return;
           }
           const bs = currentStops.find((x) => x.id === q("currentBoarding").value);
           const ds = currentStops.find((x) => x.id === q("currentDropping").value);
           if (!bs || !ds || bs.stop_order >= ds.stop_order || !currentFares.some((x) => x.boarding_stop_id === bs.id && x.dropping_stop_id === ds.id)) {
-            alert("Choose valid boarding and drop-off stops.");
+            showBookingPopup("Choose valid boarding and drop-off stops.", true);
             return;
           }
           currentBoarding = bs.id;
@@ -11355,8 +11503,7 @@ if (recentContainer) {
               return [seatNo, {
                 name: card.querySelector('[name="name"]')?.value || "",
                 age: card.querySelector('[name="age"]')?.value || "",
-                phone: card.querySelector('[name="phone"]')?.value || "",
-                is_disabled: card.querySelector('[name="is_disabled"]')?.checked === true,
+                gender: card.querySelector('[name="gender"]')?.value || "",
               }];
             }));
             q("passengers").replaceChildren();
@@ -11391,30 +11538,50 @@ if (recentContainer) {
               age.placeholder = "Enter age";
               age.required = true;
               appendField("Age", age, "age");
-              const phone = document.createElement("input");
-              phone.name = "phone";
-              phone.type = "tel";
-              phone.placeholder = "10-digit mobile number";
-              phone.autocomplete = "tel-national";
-              phone.inputMode = "numeric";
-              phone.maxLength = 10;
-              phone.pattern = "[6-9][0-9]{9}";
-              phone.required = true;
-              restrictMobile(phone);
-              appendField("Mobile Number", phone, "phone");
-              const disabilityLabel = document.createElement("label");
-              disabilityLabel.className = "passenger-disability-label";
-              const disability = document.createElement("input");
-              disability.type = "checkbox";
-              disability.name = "is_disabled";
-              disabilityLabel.append(disability, document.createTextNode("is Disabled / PwD"));
-              box.appendChild(disabilityLabel);
+              const genderField = document.createElement("div");
+              genderField.className = "passenger-gender";
+              const genderLabel = document.createElement("span");
+              genderLabel.className = "passenger-gender-label";
+              genderLabel.textContent = "Gender";
+              genderField.appendChild(genderLabel);
+              const genderOptions = document.createElement("div");
+              genderOptions.className = "passenger-gender-options";
+              const genderValue = document.createElement("input");
+              genderValue.type = "hidden";
+              genderValue.name = "gender";
+              genderField.append(genderOptions, genderValue);
+              [["male", "♂", "Male"], ["female", "♀", "Female"], ["other", "⚧", "Other"]].forEach(([value, icon, label]) => {
+                const option = document.createElement("button");
+                option.type = "button";
+                option.className = "passenger-gender-option";
+                option.dataset.gender = value;
+                option.setAttribute("aria-pressed", "false");
+                const glyph = document.createElement("span");
+                glyph.className = "gender-icon";
+                glyph.setAttribute("aria-hidden", "true");
+                glyph.textContent = icon;
+                option.append(glyph, document.createTextNode(label));
+                option.addEventListener("click", () => {
+                  genderValue.value = value;
+                  genderOptions.querySelectorAll("button").forEach((button) => {
+                    const active = button === option;
+                    button.classList.toggle("selected", active);
+                    button.setAttribute("aria-pressed", active ? "true" : "false");
+                  });
+                });
+                genderOptions.appendChild(option);
+              });
+              box.appendChild(genderField);
               const previous = previousPassengerData.get(seat);
               if (previous) {
                 name.value = previous.name;
                 age.value = previous.age;
-                phone.value = previous.phone;
-                disability.checked = previous.is_disabled;
+                if (previous.gender) genderOptions.querySelectorAll("button").forEach((button) => {
+                  const selected = button.dataset.gender === previous.gender.toLowerCase();
+                  button.classList.toggle("selected", selected);
+                  button.setAttribute("aria-pressed", selected ? "true" : "false");
+                  if (selected) genderValue.value = previous.gender.toLowerCase();
+                });
               }
               q("passengers").appendChild(box);
             });
@@ -11424,12 +11591,13 @@ if (recentContainer) {
           q("seatPanel").hidden = true;
           q("reviewPanel").hidden = true;
           q("passengerPanel").hidden = false;
+          recordAppNavigation("passengerPanel", "bookTab");
           q("passengerPanel").scrollIntoView({ behavior: "smooth" });
         };
         q("passengerForm").onsubmit = async function (e) {
           e.preventDefault();
           if (!readDemoAuthSession()) {
-            alert("Customer login is required to book.");
+            showBookingPopup("Customer login is required to book.", true);
             openDemoAuth();
             return;
           }
@@ -11437,11 +11605,10 @@ if (recentContainer) {
           const people = [...q("passengers").children].map((box) => ({
             name: box.querySelector('[name="name"]').value.trim(),
             age: Number(box.querySelector('[name="age"]').value),
-            phone: box.querySelector('[name="phone"]').value.trim(),
-            is_disabled: box.querySelector('[name="is_disabled"]')?.checked === true,
+            gender: box.querySelector('[name="gender"]').value,
           }));
-          if (people.some((p) => !p.name || !Number.isInteger(p.age) || p.age < 1 || p.age > 120 || !/^[6-9][0-9]{9}$/.test(p.phone))) {
-            alert("Check the passenger details.");
+          if (people.some((p) => !p.name || !Number.isInteger(p.age) || p.age < 1 || p.age > 120 || !["male", "female", "other"].includes(p.gender))) {
+            showBookingPopup("Check the passenger details.", true);
             return;
           }
           reviewPeople = people;
@@ -11476,16 +11643,17 @@ if (recentContainer) {
           addReviewDetail("Bus Number", currentTrip.bus.bus_number || "Not provided");
           addReviewDetail("Bus Type", currentTrip.bus.bus_type || "Bus");
           addReviewDetail("Seat No.", [...seats].sort((a, b) => a - b).join(", "));
-          addReviewDetail("Passengers", people.map((person, i) => `${i + 1}. ${person.name} (Age ${person.age}${person.is_disabled ? ", PwD" : ""})`).join("; "));
+          addReviewDetail("Passengers", people.map((person, i) => `${i + 1}. ${person.name} · Age ${person.age} · ${person.gender[0].toUpperCase() + person.gender.slice(1)}`).join("; "));
           addReviewDetail("Total Fare", money(currentFare * seats.length));
           q("passengerPanel").hidden = true;
           q("reviewPanel").hidden = false;
+          recordAppNavigation("reviewPanel", "bookTab");
           q("reviewPanel").scrollIntoView({ behavior: "smooth" });
         };
         q("reviewForm").onsubmit = async function (e) {
           e.preventDefault();
           if (!readDemoAuthSession()) {
-            alert("Customer login is required to book.");
+            showBookingPopup("Customer login is required to book.", true);
             openDemoAuth();
             return;
           }
@@ -11497,29 +11665,10 @@ if (recentContainer) {
           try {
             const sortedSeats = [...seats].sort((a, b) => a - b);
             const selectedPaymentMethod = q("paymentMethod").value || "cash";
-            const data = await rpc("app_create_booking", {
-              p_trip_id: currentTrip.trip.id,
-              p_boarding_stop_id: currentBoarding,
-              p_dropping_stop_id: currentDropping,
-              p_seats: sortedSeats,
-              p_customer_name: reviewPeople[0].name,
-              p_customer_phone: reviewPeople[0].phone,
-              p_passenger_details: reviewPeople.map((p, i) => ({
-                seat_no: sortedSeats[i],
-                name: p.name,
-                age: p.age,
-                phone: p.phone,
-                is_disabled: p.is_disabled,
-              })),
-              p_payment_method: selectedPaymentMethod,
-              p_customer_email: readDemoAuthSession()?.email || null,
-            });
-            const row = Array.isArray(data) ? data[0] : data;
-            if (!row?.booking_pnr) throw new Error("The booking response did not include a PNR.");
             const selectedBoarding = currentStops.find((x) => x.id === currentBoarding);
             const selectedDropping = currentStops.find((x) => x.id === currentDropping);
             const booking = {
-              id: row.booking_pnr,
+              id: "",
               bus: currentTrip.bus.bus_name,
               busType: currentTrip.bus.bus_type || "—",
               busNumber: currentTrip.bus.bus_number || "—",
@@ -11531,15 +11680,59 @@ if (recentContainer) {
               date: journeyDate,
               seats: sortedSeats,
               people: reviewPeople,
-              total: Number(row.total_fare),
+              total: Number(currentFare * sortedSeats.length),
               paymentMethod: selectedPaymentMethod,
-              paymentStatus: "pending",
-              status: selectedPaymentMethod === "cash" ? "pending" : "confirmed",
+              paymentStatus: selectedPaymentMethod === "cash" ? "unpaid" : "pending",
+              status: selectedPaymentMethod === "cash" ? "confirmed" : "pending",
               createdAt: new Date().toISOString(),
               departureTime: selectedBoarding.departure_time || "—",
               boardingTime: selectedBoarding.departure_time || "—",
               droppingTime: selectedDropping.arrival_time || "—",
             };
+            const bookingPayload = {
+              p_trip_id: currentTrip.trip.id,
+              p_boarding_stop_id: currentBoarding,
+              p_dropping_stop_id: currentDropping,
+              p_seats: sortedSeats,
+              p_customer_name: reviewPeople[0].name,
+              p_customer_phone: readDemoAuthSession()?.user?.user_metadata?.mobile || readDemoAuthSession()?.user?.user_metadata?.phone || "",
+              p_passenger_details: reviewPeople.map((p, i) => ({
+                seat_no: sortedSeats[i],
+                name: p.name,
+                age: p.age,
+                gender: p.gender,
+              })),
+              p_payment_method: selectedPaymentMethod,
+              p_customer_email: readDemoAuthSession()?.email || null,
+            };
+            if (selectedPaymentMethod === "upi") {
+              if (!window.Cashfree) throw new Error("Cashfree Checkout did not load. Refresh the page and retry.");
+              const pending = { booking, orderId: "" };
+              sessionStorage.setItem("bookmyseat_cashfree_pending", JSON.stringify(pending));
+              bookingPayload.client_platform = "web";
+              const order = await cashfreeFunction("cashfree-create-order", bookingPayload);
+              if (!order.order_id || !order.payment_session_id) throw new Error("Cashfree did not return a payment session.");
+              if (!["sandbox","production"].includes(String(order.mode||"").toLowerCase())) throw new Error("Cashfree environment is not configured on the server.");
+              pending.orderId = order.order_id;
+              sessionStorage.setItem("bookmyseat_cashfree_pending", JSON.stringify(pending));
+              const cashfree = window.Cashfree({ mode: String(order.mode).toLowerCase() });
+              const checkoutResult = await cashfree.checkout({ paymentSessionId: order.payment_session_id, redirectTarget: "_modal" });
+              if (checkoutResult?.redirect) return;
+              if (checkoutResult?.paymentDetails || checkoutResult?.error) {
+                await verifyAndDisplayCashfreeBooking(order.order_id, booking);
+                if (checkoutResult?.error && booking.status !== "confirmed") {
+                  showBookingPopup(checkoutResult.error.message || "Checkout closed or reported an error. No ticket is confirmed until payment is verified.", true);
+                }
+                return;
+              }
+              await verifyAndDisplayCashfreeBooking(order.order_id, booking);
+              return;
+            }
+            const data = await rpc("app_create_booking", { ...bookingPayload, p_payment_method: "cash" });
+            const row = Array.isArray(data) ? data[0] : data;
+            if (!row?.booking_pnr) throw new Error("The booking response did not include a PNR.");
+            booking.id = row.booking_pnr;
+            booking.total = Number(row.total_fare);
             renderTicket(booking);
             q("ticketPanel").dataset.newBookingConfirmation = "true";
             q("results").hidden = true;
@@ -11547,12 +11740,15 @@ if (recentContainer) {
             q("passengerPanel").hidden = true;
             q("reviewPanel").hidden = true;
             q("ticketPanel").hidden = false;
+            replaceAppNavigation("searchPanel", "bookTab");
+            recordAppNavigation("ticketPanel", "bookTab");
             q("ticketPanel").scrollIntoView({ behavior: "smooth" });
-            alert("Booking successful! PNR: " + booking.id);
+            showBookingPopup("Booking successful. PNR: " + booking.id);
             seats = [];
             reviewPeople = [];
           } catch (err) {
-            alert("Booking failed: " + err.message + ". Please review the trip and try again.");
+            sessionStorage.removeItem("bookmyseat_cashfree_pending");
+            showBookingPopup("Booking failed: " + err.message + ". Please review the trip and try again.", true);
           } finally {
             submit.disabled = false;
             submit.textContent = originalText;
@@ -11657,6 +11853,62 @@ if (recentContainer) {
             submit.textContent = originalText;
           }
         };
+        async function verifyAndDisplayCashfreeBooking(orderId, booking) {
+          for (let attempt = 0; attempt < 5; attempt++) {
+            const result = await cashfreeFunction("cashfree-verify-payment", { order_id: orderId });
+            const state = String(result.status || "").toUpperCase();
+            if (state === "SUCCESS" && result.booking_pnr) {
+              booking.id = result.booking_pnr;
+              booking.total = Number(result.total_fare ?? booking.total);
+              booking.status = "confirmed";
+              booking.paymentMethod = "upi";
+              booking.paymentStatus = "paid";
+              sessionStorage.removeItem("bookmyseat_cashfree_pending");
+              renderTicket(booking);
+              q("ticketPanel").dataset.newBookingConfirmation = "true";
+              ["searchPanel", "results", "seatPanel", "passengerPanel", "reviewPanel", "authPanel"].forEach((id) => { if (q(id)) q(id).hidden = true; });
+              q("ticketPanel").hidden = false;
+              replaceAppNavigation("searchPanel", "bookTab");
+              recordAppNavigation("ticketPanel", "bookTab");
+              q("ticketPanel").scrollIntoView({ behavior: "smooth" });
+              seats = [];
+              reviewPeople = [];
+              showBookingPopup("Cashfree payment verified. Ticket confirmed. PNR: " + booking.id);
+              return true;
+            }
+            if (["FAILED", "CANCELLED"].includes(state)) {
+              sessionStorage.removeItem("bookmyseat_cashfree_pending");
+              showBookingPopup(state === "CANCELLED" ? "Payment cancelled. No ticket was booked." : "Payment failed. No ticket was booked; you can retry.", true);
+              return false;
+            }
+            if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 1500));
+          }
+          showBookingPopup("Payment is still processing. No ticket is confirmed yet; check My Trips shortly.", true);
+          return false;
+        }
+        async function restoreCashfreeCheckoutReturn() {
+          const url = new URL(window.location.href);
+          const orderId = url.searchParams.get("cashfree_order_id") || url.searchParams.get("order_id");
+          let pending = null;
+          try { pending = JSON.parse(sessionStorage.getItem("bookmyseat_cashfree_pending") || "null"); } catch (_) {}
+          const selectedOrderId = orderId || pending?.orderId;
+          if (!selectedOrderId) return;
+          if (orderId) {
+            url.searchParams.delete("cashfree_order_id");
+            url.searchParams.delete("order_id");
+            history.replaceState(history.state || {}, "", url.pathname + url.search + url.hash);
+          }
+          if (!pending?.booking || !readDemoAuthSession()) {
+            showBookingPopup("Sign in to view your Cashfree booking status.", true);
+            return;
+          }
+          try {
+            await verifyAndDisplayCashfreeBooking(selectedOrderId, pending.booking);
+          } catch (error) {
+            showBookingPopup("Could not verify Cashfree payment: " + error.message + ". Check My Trips before retrying.", true);
+          }
+        }
+        restoreCashfreeCheckoutReturn();
         window.addEventListener(
           "apniBus:customer-authenticated-for-booking",
           async (event) => {
