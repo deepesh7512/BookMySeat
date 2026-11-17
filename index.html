@@ -9913,6 +9913,7 @@
                     "Bus Name",
                     "Bus Number",
                     "Type",
+                    "Seat Layout",
                     "Seats",
                     "Operator",
                     "Status",
@@ -9956,6 +9957,7 @@
                 x.bus_name,
                 x.bus_number || "—",
                 x.bus_type || "—",
+                x.seat_layout || "2x2",
                 x.total_seats,
                 operators.find((o) => o.id === x.operator_id)?.operator_name ||
                   "—",
@@ -10129,7 +10131,7 @@
           const queryFor = () => {
             const queries = {
               currentOperators: "app_operators?select=id,operator_name,phone,email,active&order=operator_name",
-              currentBuses: "app_buses?select=id,operator_id,bus_name,bus_number,bus_type,total_seats,active&order=bus_name",
+              currentBuses: "app_buses?select=id,operator_id,bus_name,bus_number,bus_type,seat_layout,total_seats,active&order=bus_name",
               currentRoutes: "app_routes?select=id,bus_id,route_name,fare_type,active&order=route_name",
               currentRouteStops: "app_route_stops?select=id,route_id,shared_stop_id,stop_order,stop_name,arrival_time,departure_time,distance_km,segment_minutes&order=stop_order",
               currentTripsAdmin: "app_trips?select=id,route_id,bus_id,journey_date,status&order=journey_date.desc",
@@ -10232,7 +10234,7 @@
                 "app_operators?select=id,operator_name,phone,email,active&order=operator_name&limit=10",
               ),
               req(
-                "app_buses?select=id,operator_id,bus_name,bus_number,bus_type,total_seats,active&order=bus_name&limit=10",
+                "app_buses?select=id,operator_id,bus_name,bus_number,bus_type,seat_layout,total_seats,active&order=bus_name&limit=10",
               ),
               req(
                 "app_routes?select=id,bus_id,route_name,fare_type,active&order=route_name&limit=10",
@@ -10759,7 +10761,13 @@ if (recentContainer) {
         });
         function updateAdminBusLayouts(){
           const combo=$a("currentBusType").value.includes("Sleeper"), select=$a("currentBusLayout");
-          select.replaceChildren(...(combo?["Single Deck","Double Deck"]:["2x2","2x3"]).map(v=>{const o=document.createElement("option");o.textContent=v;return o;}));
+          const values=combo?["Single Deck","Double Deck"]:["2x2","2x3"];
+          const current=select.value;
+          const sameOptions=select.options.length===values.length&&values.every((value,index)=>select.options[index].value===value);
+          if(!sameOptions){
+            select.replaceChildren(...values.map(value=>{const option=document.createElement("option");option.value=value;option.textContent=value;return option;}));
+            select.value=values.includes(current)?current:values[0];
+          }
           $a("currentBusDeckLayouts").hidden=!combo;
           const showUpper=combo&&select.value==="Double Deck";$a("currentBusUpperLayoutLabel").hidden=!showUpper;$a("currentBusUpperLayout").hidden=!showUpper;
         }
@@ -11192,6 +11200,11 @@ if (recentContainer) {
           const list = q("seatList");
           list.replaceChildren();
           seats = [];
+          const seatLayout=String(currentTrip.bus.seat_layout||"2x2").trim().toLowerCase();
+          const seatsPerRow=seatLayout==="2x3"||seatLayout.endsWith(":2x3")?5:4;
+          list.style.gridTemplateColumns=seatsPerRow===5
+            ?"minmax(0,1fr) minmax(0,1fr) 24px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)"
+            :"minmax(0,1fr) minmax(0,1fr) 24px minmax(0,1fr) minmax(0,1fr)";
           for (let i = 1; i <= Number(currentTrip.bus.total_seats); i++) {
             const btn = document.createElement("button");
             btn.type = "button";
@@ -11217,7 +11230,7 @@ if (recentContainer) {
               };
             }
             list.appendChild(btn);
-            if (i % 4 === 2) {
+            if (i % seatsPerRow === 2) {
               const aisle = document.createElement("span");
               aisle.className = "seat-aisle";
               aisle.setAttribute("aria-hidden", "true");
@@ -11339,6 +11352,8 @@ if (recentContainer) {
               addInfoFact(facts, "Bus Operator", item.bus.operator_name, "bus-card-fact");
               addInfoFact(facts, "Bus Number", item.bus.bus_number || "Not provided", "bus-card-fact");
               addInfoFact(facts, "Bus Type", item.bus.bus_type || "Bus", "bus-card-fact");
+              const layoutValue=String(item.bus.seat_layout||"2x2").toLowerCase();
+              addInfoFact(facts, "Seat Layout", layoutValue==="2x3"||layoutValue.endsWith(":2x3")?"2 × 3 Seater":layoutValue==="2x2"?"2 × 2 Seater":layoutValue, "bus-card-fact");
               addInfoFact(facts, "Capacity", `${item.bus.total_seats || "—"} seats`, "bus-card-fact");
               card.appendChild(facts);
               const route = addText(
