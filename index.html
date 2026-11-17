@@ -4718,7 +4718,11 @@
         width: 52px;
         height: 52px;
         object-fit: contain;
+        filter: drop-shadow(0 5px 11px rgba(15, 31, 52, .18));
+        animation: brand-mark-float 4.2s ease-in-out infinite;
       }
+      @keyframes brand-mark-float { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-2px) rotate(-1.2deg); } }
+      @media (prefers-reduced-motion: reduce) { .site-brand-mark { animation: none; } }
       .site-brand-copy { min-width: 0; }
       header.site-header .site-brand h1 {
         margin: 0;
