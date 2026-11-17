@@ -1713,8 +1713,8 @@
       .promo-admin-grid{display:grid;grid-template-columns:minmax(280px,1.1fr) minmax(260px,.9fr);gap:22px;margin-top:20px;align-items:start}
       .promo-admin-form,.promo-admin-preview-wrap{padding:22px;border:1px solid #e7eaf0;border-radius:18px;background:#fff;box-shadow:0 12px 34px rgba(20,36,59,.06)}
       .promo-admin-form label{display:block;margin:13px 0 6px;color:#344054;font-size:13px;font-weight:700}
-      .promo-admin-form input:not([type=checkbox]),.promo-admin-form textarea{width:100%;border:1px solid #d8dee8;border-radius:11px;padding:12px 13px;color:#14243b;background:#fff;font:inherit;outline:none}
-      .promo-admin-form input:focus,.promo-admin-form textarea:focus{border-color:#c69a45;box-shadow:0 0 0 3px rgba(198,154,69,.14)}
+      .promo-admin-form input:not([type=checkbox]),.promo-admin-form textarea,.promo-admin-form select{width:100%;border:1px solid #d8dee8;border-radius:11px;padding:12px 13px;color:#14243b;background:#fff;font:inherit;outline:none}
+      .promo-admin-form input:focus,.promo-admin-form textarea:focus,.promo-admin-form select:focus{border-color:#c69a45;box-shadow:0 0 0 3px rgba(198,154,69,.14)}
       .promo-admin-form .promo-admin-toggle{display:flex;align-items:center;gap:10px;margin:0 0 16px;padding:13px;border-radius:12px;background:#f7f8fa}
       .promo-admin-toggle input{width:18px;height:18px;accent-color:#14243b}
       .promo-admin-hint{margin:7px 0;color:#7b8492;font-size:12px;line-height:1.5}
@@ -5781,6 +5781,26 @@
                 </form>
                 <div class="promo-admin-preview-wrap"><span class="promo-admin-preview-label">LIVE PREVIEW</span><article class="promo-admin-preview" id="adminPromoPreview"><span id="adminPromoPreviewEyebrow"></span><strong id="adminPromoPreviewTitle"></strong><p id="adminPromoPreviewSubtitle"></p><span class="promo-admin-preview-cta" id="adminPromoPreviewCta"></span><span class="promo-admin-bus" aria-hidden="true">🚌</span></article></div>
               </div>
+              <div class="promo-admin-heading" style="margin-top:34px">
+                <span class="promo-admin-kicker">LIVE CAMPAIGNS</span>
+                <h3>Seasonal greetings &amp; announcements</h3>
+                <p>Publish festival greetings, important updates, offers or promos to the customer app without releasing a new app version.</p>
+              </div>
+              <div class="promo-admin-grid">
+                <form id="adminCampaignForm" class="promo-admin-form">
+                  <label class="promo-admin-toggle"><input id="adminCampaignEnabled" type="checkbox" /> Show this campaign in the customer app</label>
+                  <label for="adminCampaignType">Campaign type</label>
+                  <select id="adminCampaignType"><option value="greeting">Greeting</option><option value="festival">Festival</option><option value="update">Service update</option><option value="offer">Offer</option><option value="promo">Promotion</option></select>
+                  <label class="promo-admin-toggle"><input id="adminCampaignShowOnLaunch" type="checkbox" checked /> Show a welcome panel when the app opens</label>
+                  <label for="adminCampaignTitle">Title</label><input id="adminCampaignTitle" maxlength="72" placeholder="Happy Diwali!" />
+                  <label for="adminCampaignMessage">Message</label><textarea id="adminCampaignMessage" maxlength="220" rows="3" placeholder="Wishing you a bright and joyful journey this festive season."></textarea>
+                  <label for="adminCampaignCta">Action label</label><input id="adminCampaignCta" maxlength="28" placeholder="Explore offers" />
+                  <label for="adminCampaignLink">Clickable destination (optional)</label><input id="adminCampaignLink" type="url" placeholder="https://example.com/offer" />
+                  <p class="promo-admin-hint">Enabled campaigns appear on Home. This option also presents the greeting after the native splash screen each time the app is opened. Leave the link blank to scroll to bus search.</p>
+                  <div class="promo-admin-actions"><button id="adminCampaignSave" type="submit">Publish campaign</button><span id="adminCampaignStatus" role="status" aria-live="polite"></span></div>
+                </form>
+                <div class="promo-admin-preview-wrap"><span class="promo-admin-preview-label">CAMPAIGN PREVIEW</span><article class="promo-admin-preview" id="adminCampaignPreview"><span id="adminCampaignPreviewType">FESTIVAL GREETING</span><strong id="adminCampaignPreviewTitle">Happy Diwali!</strong><p id="adminCampaignPreviewMessage">Wishing you a bright and joyful journey this festive season.</p><span class="promo-admin-preview-cta" id="adminCampaignPreviewCta">Explore offers</span><span class="promo-admin-bus" aria-hidden="true">✦</span></article></div>
+              </div>
           </div>
         </div>
       </section>
@@ -6143,11 +6163,20 @@
         $("adminPromoPreviewCta").textContent = value("adminPromoCta", "Explore now →");
         $("adminPromoPreview").style.opacity = $("adminPromoEnabled").checked ? "1" : ".48";
       }
+      function updateAdminCampaignPreview() {
+        const type = $("adminCampaignType").value;
+        const labels = { greeting: "TRAVEL GREETING", festival: "FESTIVAL GREETING", update: "SERVICE UPDATE", offer: "TRAVEL OFFER", promo: "SPECIAL PROMOTION" };
+        $("adminCampaignPreviewType").textContent = labels[type] || "CUSTOMER CAMPAIGN";
+        $("adminCampaignPreviewTitle").textContent = $("adminCampaignTitle").value.trim() || "Happy Diwali!";
+        $("adminCampaignPreviewMessage").textContent = $("adminCampaignMessage").value.trim() || "Wishing you a bright and joyful journey this festive season.";
+        $("adminCampaignPreviewCta").textContent = $("adminCampaignCta").value.trim() || "Explore offers";
+        $("adminCampaignPreview").style.opacity = $("adminCampaignEnabled").checked ? "1" : ".48";
+      }
       async function loadAdminHomePromo() {
         const status = $("adminPromoStatus");
         status.textContent = "Loading current promo…";
         try {
-          const rows = await adminBusRequest("/rest/v1/bms_app_settings?select=promo_enabled,promo_eyebrow,promo_title,promo_subtitle,promo_cta,promo_link&id=eq.home_promo");
+          const rows = await adminBusRequest("/rest/v1/bms_app_settings?select=promo_enabled,promo_eyebrow,promo_title,promo_subtitle,promo_cta,promo_link,campaign_enabled,campaign_type,campaign_title,campaign_message,campaign_cta,campaign_link,campaign_show_on_launch,campaign_updated_at&id=eq.home_promo");
           const promo = rows?.[0];
           if (!promo) throw new Error("Promo settings were not found. Apply the customer home promo migration first.");
           $("adminPromoEnabled").checked = promo.promo_enabled !== false;
@@ -6158,6 +6187,15 @@
           $("adminPromoLink").value = promo.promo_link || "";
           updateAdminPromoPreview();
           status.textContent = "Published settings loaded";
+          $("adminCampaignEnabled").checked = promo.campaign_enabled === true;
+          $("adminCampaignType").value = promo.campaign_type || "greeting";
+          $("adminCampaignShowOnLaunch").checked = promo.campaign_show_on_launch !== false;
+          $("adminCampaignTitle").value = promo.campaign_title || "";
+          $("adminCampaignMessage").value = promo.campaign_message || "";
+          $("adminCampaignCta").value = promo.campaign_cta || "";
+          $("adminCampaignLink").value = promo.campaign_link || "";
+          updateAdminCampaignPreview();
+          $("adminCampaignStatus").textContent = "Campaign settings loaded";
         } catch (error) { status.textContent = error.message; }
       }
       $("adminHomePromoForm").addEventListener("input", updateAdminPromoPreview);
@@ -6180,6 +6218,30 @@
         finally { button.disabled = false; }
       });
       updateAdminPromoPreview();
+      $("adminCampaignForm").addEventListener("input", updateAdminCampaignPreview);
+      $("adminCampaignForm").addEventListener("change", updateAdminCampaignPreview);
+      $("adminCampaignForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const status = $("adminCampaignStatus");
+        const enabled = $("adminCampaignEnabled").checked;
+        const title = $("adminCampaignTitle").value.trim();
+        const message = $("adminCampaignMessage").value.trim();
+        const link = $("adminCampaignLink").value.trim();
+        if (enabled && (!title || !message)) { status.textContent = "Enter a title and message before publishing."; return; }
+        if (link) {
+          try { const url = new URL(link); if (!["https:", "http:"].includes(url.protocol)) throw new Error(); }
+          catch { $("adminCampaignLink").setCustomValidity("Enter a valid http:// or https:// URL."); $("adminCampaignLink").reportValidity(); return; }
+        }
+        $("adminCampaignLink").setCustomValidity("");
+        const button = $("adminCampaignSave"); button.disabled = true; status.textContent = "Publishing campaign…";
+        const payload = { campaign_enabled: enabled, campaign_type: $("adminCampaignType").value, campaign_title: title, campaign_message: message, campaign_cta: $("adminCampaignCta").value.trim() || "Explore now", campaign_link: link, campaign_show_on_launch: $("adminCampaignShowOnLaunch").checked, campaign_updated_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+        try {
+          await adminBusRequest("/rest/v1/bms_app_settings?id=eq.home_promo", { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(payload) });
+          status.textContent = enabled ? "Campaign published to the customer app" : "Campaign turned off for customers";
+        } catch (error) { status.textContent = "Could not publish: " + error.message; }
+        finally { button.disabled = false; }
+      });
+      updateAdminCampaignPreview();
       let editingBusId = null;
 
       // Realtime listener for admin notification inserts and read-state updates.
