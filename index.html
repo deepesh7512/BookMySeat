@@ -1707,6 +1707,29 @@
         border-bottom: 1px solid #e5e7eb;
         color: #991b1b;
       }
+      .promo-admin-heading .promo-admin-kicker,.promo-admin-preview-label{display:block;color:#a77b26;font-size:11px;font-weight:800;letter-spacing:.12em}
+      .promo-admin-heading h3{margin:5px 0 4px!important;padding:0!important;border:0!important;color:#14243b!important;font-size:24px}
+      .promo-admin-heading p{margin:0;color:#687386;max-width:680px;line-height:1.6}
+      .promo-admin-grid{display:grid;grid-template-columns:minmax(280px,1.1fr) minmax(260px,.9fr);gap:22px;margin-top:20px;align-items:start}
+      .promo-admin-form,.promo-admin-preview-wrap{padding:22px;border:1px solid #e7eaf0;border-radius:18px;background:#fff;box-shadow:0 12px 34px rgba(20,36,59,.06)}
+      .promo-admin-form label{display:block;margin:13px 0 6px;color:#344054;font-size:13px;font-weight:700}
+      .promo-admin-form input:not([type=checkbox]),.promo-admin-form textarea{width:100%;border:1px solid #d8dee8;border-radius:11px;padding:12px 13px;color:#14243b;background:#fff;font:inherit;outline:none}
+      .promo-admin-form input:focus,.promo-admin-form textarea:focus{border-color:#c69a45;box-shadow:0 0 0 3px rgba(198,154,69,.14)}
+      .promo-admin-form .promo-admin-toggle{display:flex;align-items:center;gap:10px;margin:0 0 16px;padding:13px;border-radius:12px;background:#f7f8fa}
+      .promo-admin-toggle input{width:18px;height:18px;accent-color:#14243b}
+      .promo-admin-hint{margin:7px 0;color:#7b8492;font-size:12px;line-height:1.5}
+      .promo-admin-actions{display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
+      .promo-admin-actions button{border-radius:12px;background:linear-gradient(135deg,#14243b,#263c59);padding:12px 19px;color:#f1d18d;font-weight:800}
+      #adminPromoStatus{color:#397550;font-size:13px}
+      .promo-admin-preview-wrap{position:sticky;top:20px;background:#f7f8fa}
+      .promo-admin-preview{position:relative;overflow:hidden;min-height:210px;margin-top:12px;padding:23px;border-radius:20px;background:linear-gradient(130deg,#14243b,#344d6b 72%,#b58a43);color:white;box-shadow:0 18px 35px rgba(20,36,59,.2)}
+      .promo-admin-preview>span:first-child{position:relative;z-index:1;color:#f4d28d;font-size:10px;font-weight:800;letter-spacing:.12em}
+      .promo-admin-preview strong{position:relative;z-index:1;display:block;max-width:78%;margin-top:15px;font-size:25px;line-height:1.12}
+      .promo-admin-preview p{position:relative;z-index:1;max-width:72%;margin:8px 0 16px;color:#e4e9ef;font-size:13px}
+      .promo-admin-preview-cta{position:relative;z-index:1;display:inline-block;padding:8px 13px;border-radius:999px;background:#f1d18d;color:#14243b;font-size:12px;font-weight:800}
+      .promo-admin-bus{position:absolute;right:7px;bottom:4px;font-size:65px;filter:drop-shadow(0 7px 5px #101b2c66);animation:promo-bus-float 2.2s ease-in-out infinite alternate}
+      @keyframes promo-bus-float{to{transform:translateY(-6px) rotate(-2deg)}}
+      @media(max-width:760px){.promo-admin-grid{grid-template-columns:1fr}.promo-admin-preview-wrap{position:static}.promo-admin-form,.promo-admin-preview-wrap{padding:16px}}
 
       .admin-content form {
         max-width: 650px;
@@ -5304,6 +5327,7 @@
             >
               💾 Backup & Restore
             </button>
+            <button type="button" class="admin-nav-btn" data-admin-target="home-promo">🎨 Home Promo</button>
           </aside>
           
           <div class="admin-content">
@@ -5732,6 +5756,27 @@
 
                 <p id="restoreMessage" role="status" aria-live="polite"></p>
               </div>
+            </div>
+
+            <div class="admin-section-view" data-admin-view="home-promo">
+              <div class="promo-admin-heading">
+                <span class="promo-admin-kicker">CUSTOMER APP</span>
+                <h3>Home promo card</h3>
+                <p>Update the banner customers see in the Book My Seat app. Changes publish to all customers after saving.</p>
+              </div>
+              <div class="promo-admin-grid">
+                <form id="adminHomePromoForm" class="promo-admin-form">
+                  <label class="promo-admin-toggle"><input id="adminPromoEnabled" type="checkbox" checked /> Show this promo in the customer app</label>
+                  <label for="adminPromoEyebrow">Small label</label><input id="adminPromoEyebrow" maxlength="36" required />
+                  <label for="adminPromoTitle">Headline</label><input id="adminPromoTitle" maxlength="72" required />
+                  <label for="adminPromoSubtitle">Description</label><textarea id="adminPromoSubtitle" maxlength="140" rows="3"></textarea>
+                  <label for="adminPromoCta">Action label</label><input id="adminPromoCta" maxlength="28" required />
+                  <label for="adminPromoLink">Clickable destination (optional)</label><input id="adminPromoLink" type="url" placeholder="https://example.com/offer" />
+                  <p class="promo-admin-hint">Leave the destination blank to send customers to bus search. Use a full http:// or https:// URL.</p>
+                  <div class="promo-admin-actions"><button id="adminPromoSave" type="submit">Save &amp; publish</button><span id="adminPromoStatus" role="status" aria-live="polite"></span></div>
+                </form>
+                <div class="promo-admin-preview-wrap"><span class="promo-admin-preview-label">LIVE PREVIEW</span><article class="promo-admin-preview" id="adminPromoPreview"><span id="adminPromoPreviewEyebrow"></span><strong id="adminPromoPreviewTitle"></strong><p id="adminPromoPreviewSubtitle"></p><span class="promo-admin-preview-cta" id="adminPromoPreviewCta"></span><span class="promo-admin-bus" aria-hidden="true">🚌</span></article></div>
+              </div>
           </div>
         </div>
       </section>
@@ -6086,6 +6131,51 @@
           );
         return includeHeaders ? { data, headers: response.headers } : data;
       }
+      function updateAdminPromoPreview() {
+        const value = (id, fallback) => $(id)?.value?.trim() || fallback;
+        $("adminPromoPreviewEyebrow").textContent = value("adminPromoEyebrow", "PLAN YOUR JOURNEY");
+        $("adminPromoPreviewTitle").textContent = value("adminPromoTitle", "Where to next?");
+        $("adminPromoPreviewSubtitle").textContent = value("adminPromoSubtitle", "Find a bus for your next trip.");
+        $("adminPromoPreviewCta").textContent = value("adminPromoCta", "Explore now →");
+        $("adminPromoPreview").style.opacity = $("adminPromoEnabled").checked ? "1" : ".48";
+      }
+      async function loadAdminHomePromo() {
+        const status = $("adminPromoStatus");
+        status.textContent = "Loading current promo…";
+        try {
+          const rows = await adminBusRequest("/rest/v1/bms_app_settings?select=promo_enabled,promo_eyebrow,promo_title,promo_subtitle,promo_cta,promo_link&id=eq.home_promo");
+          const promo = rows?.[0];
+          if (!promo) throw new Error("Promo settings were not found. Apply the customer home promo migration first.");
+          $("adminPromoEnabled").checked = promo.promo_enabled !== false;
+          $("adminPromoEyebrow").value = promo.promo_eyebrow || "";
+          $("adminPromoTitle").value = promo.promo_title || "";
+          $("adminPromoSubtitle").value = promo.promo_subtitle || "";
+          $("adminPromoCta").value = promo.promo_cta || "";
+          $("adminPromoLink").value = promo.promo_link || "";
+          updateAdminPromoPreview();
+          status.textContent = "Published settings loaded";
+        } catch (error) { status.textContent = error.message; }
+      }
+      $("adminHomePromoForm").addEventListener("input", updateAdminPromoPreview);
+      $("adminHomePromoForm").addEventListener("change", updateAdminPromoPreview);
+      $("adminHomePromoForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const status = $("adminPromoStatus");
+        const link = $("adminPromoLink").value.trim();
+        if (link) {
+          try { const url = new URL(link); if (!["https:", "http:"].includes(url.protocol)) throw new Error(); }
+          catch { $("adminPromoLink").setCustomValidity("Enter a valid http:// or https:// URL."); $("adminPromoLink").reportValidity(); return; }
+        }
+        $("adminPromoLink").setCustomValidity("");
+        const button = $("adminPromoSave"); button.disabled = true; status.textContent = "Publishing…";
+        const payload = { promo_enabled: $("adminPromoEnabled").checked, promo_eyebrow: $("adminPromoEyebrow").value.trim(), promo_title: $("adminPromoTitle").value.trim(), promo_subtitle: $("adminPromoSubtitle").value.trim(), promo_cta: $("adminPromoCta").value.trim(), promo_link: link, updated_at: new Date().toISOString() };
+        try {
+          await adminBusRequest("/rest/v1/bms_app_settings?id=eq.home_promo", { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(payload) });
+          status.textContent = "Promo published for customers";
+        } catch (error) { status.textContent = "Could not publish: " + error.message; }
+        finally { button.disabled = false; }
+      });
+      updateAdminPromoPreview();
       let editingBusId = null;
 
       // Realtime listener for admin notification inserts and read-state updates.
@@ -10985,6 +11075,7 @@ if (recentContainer) {
               refreshReportsButton
             )
               refreshReportsButton.click();
+            if (target === "home-promo") loadAdminHomePromo();
 
             if (window.matchMedia("(max-width: 760px)").matches) {
               const sidebar = button.closest(".admin-sidebar");
