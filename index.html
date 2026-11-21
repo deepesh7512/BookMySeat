@@ -7261,7 +7261,7 @@
             cash: "Cash – Pay to Bus Operator",
             upi: "UPI – Cashfree",
             pay_later: "Cash – Pay to Bus Operator",
-          }[value] || "Cash – Pay to Bus Operator"
+          }[value] || "Payment method unavailable"
         );
       }
       function paymentStatusLabel(value) {
@@ -8013,7 +8013,7 @@
         try {
           const url =
             SUPABASE_URL.replace(/\/$/, "") +
-            "/rest/v1/app_bookings?select=pnr,status,payment_status,created_at,passenger_details&customer_user_id=eq." +
+            "/rest/v1/app_bookings?select=pnr,status,payment_status,payment_method,created_at,passenger_details&customer_user_id=eq." +
             encodeURIComponent(session.userId) +
             "&order=created_at.desc&limit=" +
             encodeURIComponent(customerBookingDisplayLimit);
@@ -8139,7 +8139,7 @@
                   total: item.total_fare,
                   people: item.passenger_details || row.passenger_details || [],
                   createdAt: item.created_at || row.created_at,
-                  paymentMethod: item.payment_method,
+                  paymentMethod: row.payment_method || item.payment_method || "unknown",
                   paymentStatus: row.payment_status || "pending",
                   departureTime: item.boarding_time,
                   boardingTime: item.boarding_time,
