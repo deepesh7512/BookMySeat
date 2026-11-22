@@ -3497,6 +3497,18 @@
         line-height: 1.15;
         box-shadow: 0 3px 7px rgba(29, 96, 57, 0.07);
       }
+      #seatList .seat.sleeper-seat {
+        border-color: #c9b7e8;
+        border-top-color: #9472c7;
+        background: linear-gradient(180deg, #f8f3ff, #eee5fb);
+        color: #59378c;
+      }
+      #seatList .seat.sleeper-seat.selected {
+        border-color: #6841a4;
+        border-top-color: #4d2c82;
+        background: linear-gradient(180deg, #8b62c4, #6841a4);
+        color: #fff;
+      }
       #seatList .seat:hover:not(:disabled):not(.selected) {
         transform: translateY(-2px);
         border-color: #93c5fd;
@@ -5624,11 +5636,12 @@
                   <label for="sharedFareRoute">Route</label><select id="sharedFareRoute" required></select>
                   <label for="sharedFareType">Bus category</label>
                   <select id="sharedFareType" required>
-                    <option>Non AC Seater</option><option>Non AC Sleeper</option><option>AC Seater</option><option>AC Sleeper</option>
+                    <option>Non AC Seater</option><option>Non AC Seater + Sleeper</option><option>AC Seater</option><option>AC Seater + Sleeper</option>
                   </select>
                   <label for="sharedFareBoarding">Boarding stop</label><select id="sharedFareBoarding" required></select>
                   <label for="sharedFareDropping">Destination stop</label><select id="sharedFareDropping" required></select>
-                  <label for="sharedFareAmount">Fare (₹)</label><input id="sharedFareAmount" type="number" min="1" step="0.01" required />
+                  <label for="sharedFareAmount">Fare (₹)</label><input id="sharedFareAmount" type="number" min="10" step="10" required />
+                  <small class="muted">Suggested from distance and bus type, rounded up to the next ₹10. For mixed seater+sleeper buses this is the seater fare; sleeper-seat pricing is calculated separately. You can edit this amount.</small>
                   <button type="submit">Save Fare</button>
                 </form>
                 <div id="sharedFaresList"></div>
@@ -6523,10 +6536,13 @@
           to: row.destination || "",
           date: row.journey_date,
           seats: Array.isArray(row.seats) ? row.seats.map(Number) : [],
+          seatLabels: passengers.map((person) => person.seat_label).filter(Boolean),
           people: passengers.map((person) => ({
             name: String(person.name || ""),
             age: Number(person.age || 0),
             gender: String(person.gender || ""),
+            seat_no: Number(person.seat_no || 0),
+            seat_label: String(person.seat_label || ""),
           })),
           total: Number(row.total_fare || 0),
           paymentMethod: row.payment_method || "cash",
@@ -6576,6 +6592,7 @@
           boardingTime: row?.boarding_time || ticket?.boarding_time || "—",
           droppingTime: row?.dropping_time || ticket?.dropping_time || "—",
           seats: Array.isArray(rawSeats) ? rawSeats.map(Number) : [],
+          seatLabels: passengerRows.map((person) => person?.seat_label).filter(Boolean),
           people,
           total: Number(row?.total_fare ?? row?.fare ?? ticket?.total_fare ?? 0),
           paymentMethod: row?.payment_method || ticket?.payment_method || "cash",
@@ -6658,6 +6675,14 @@
       }
       function money(value) {
         return "₹" + Number(value || 0).toLocaleString("en-IN");
+      }
+      function seatLabelsForBooking(booking) {
+        const explicit = booking?.seatLabels || booking?.seat_labels;
+        if (Array.isArray(explicit) && explicit.length) return explicit.map(String);
+        const seats = Array.isArray(booking?.seats) ? booking.seats : [];
+        const people = booking?.passenger_details || booking?.people || [];
+        const labels = new Map((Array.isArray(people) ? people : []).map((person) => [Number(person?.seat_no), person?.seat_label]).filter(([id, label]) => Number.isFinite(id) && label));
+        return seats.map((seat) => labels.get(Number(seat)) || String(seat));
       }
       function today() {
         const d = new Date();
@@ -7245,7 +7270,7 @@
           "Bus: " + (b.bus || "—"),
           "Route: " + (b.from || "—") + " → " + (b.to || "—"),
           "Journey Date: " + (b.date || "—"),
-          "Seat No.: " + ((b.seats || []).join(", ") || "—"),
+          "Seat No.: " + (seatLabelsForBooking(b).join(", ") || "—"),
           passengerNames ? "Passenger(s): " + passengerNames : "",
           "Total Fare: " + money(b.total),
           "Payment Method: " + paymentMethodLabel(b.paymentMethod),
@@ -7355,7 +7380,7 @@
           ],
           ["Boarding Time", b.boardingTime || "—"],
           ["Dropping Time", b.droppingTime || "—"],
-          ["Seat No.", (b.seats || []).join(", ")],
+          ["Seat No.", seatLabelsForBooking(b).join(", ")],
           ["Total Fare", money(b.total)],
           ["Payment Method", paymentMethodLabel(b.paymentMethod)],
           ["Payment Status", paymentStatusLabel(b.paymentStatus)],
@@ -7383,7 +7408,7 @@
         (b.people || []).forEach((p, i) => {
           const box = document.createElement("div");
           box.className = "passenger ticket-passenger-card";
-          addText("span", "Seat No. " + (b.seats[i] ?? "—"), box, "ticket-seat-chip");
+          addText("span", "Seat No. " + (p.seat_label || seatLabelsForBooking(b)[i] || b.seats[i] || "—"), box, "ticket-seat-chip");
           addText("h4", p.name || "Passenger " + (i + 1), box, "ticket-passenger-name");
           const passengerMeta = document.createElement("div");
           passengerMeta.className = "ticket-passenger-meta";
@@ -7836,7 +7861,7 @@
           addText("p", "Bus: " + booking.bus, result);
           addText("p", "Route: " + booking.from + " → " + booking.to, result);
           addText("p", "Journey Date: " + booking.date, result);
-          addText("p", "Seat Number: " + booking.seats.join(", "), result);
+          addText("p", "Seat Number: " + seatLabelsForBooking(booking).join(", "), result);
           addText("p", "Total Fare: " + money(booking.total), result);
           addText(
             "p",
@@ -8122,7 +8147,7 @@
                 (item.boarding_name || "—") +
                   " → " +
                   (item.dropping_name || "—"),
-                (item.seats || []).join(", ") || "—",
+                seatLabelsForBooking(item).join(", ") || "—",
                 passengers.map((p) => p.name || "—").join(", ") || "—",
                 money(item.total_fare),
               ];
@@ -8990,7 +9015,7 @@
               b.source || b.boarding_name_snapshot || b.from || "",
               b.destination || b.dropping_name_snapshot || b.to || "",
               b.journey_date || b.date || "",
-              (b.seats || []).join(", "),
+              seatLabelsForBooking(b).join(", "),
               people.map((p) => p.name || "").join(", "),
               people.map((p) => p.age || "").join(", "),
               people.map((p) => p.phone || "").join(", "),
@@ -10020,8 +10045,29 @@
         let editingSharedRouteId = "";
         let sharedStopDurationEdited = false;
         let sharedStopDistanceEdited = false;
-        const sharedFareTypes = ["Non AC Seater", "Non AC Sleeper", "AC Seater", "AC Sleeper"];
+        const sharedFareTypes = ["Non AC Seater", "Non AC Seater + Sleeper", "AC Seater", "AC Seater + Sleeper"];
         const selectedSharedRoute = (id) => sharedRoutes.find((route) => route.route_id === $a(id)?.value);
+        const sharedFareMultiplier = (type) => ({
+          "non ac seater": 1, "non ac seater + sleeper": 1.25,
+          "ac seater": 1.5, "ac seater + sleeper": 1.5,
+        }[String(type || "").trim().toLowerCase()] || 1);
+        const calculateSharedFare = (route, type, boardingId, droppingId) => {
+          const stops = route?.stops || [];
+          const from = stops.findIndex((stop) => String(stop.id) === String(boardingId));
+          const to = stops.findIndex((stop) => String(stop.id) === String(droppingId));
+          if (from < 0 || to <= from) return null;
+          const distance = stops.slice(from + 1, to + 1).reduce((sum, stop) => sum + Math.max(0, Number(stop.distance_km) || 0), 0);
+          if (!distance) return null;
+          const normalFare = Math.max(10, Math.ceil((distance * 2) / 10) * 10);
+          return Math.max(10, Math.ceil((normalFare * sharedFareMultiplier(type)) / 10) * 10);
+        };
+        const updateSharedFareSuggestion = () => {
+          const amount = $a("sharedFareAmount");
+          if (!amount) return;
+          const fare = calculateSharedFare(selectedSharedRoute("sharedFareRoute"), $a("sharedFareType")?.value,
+            $a("sharedFareBoarding")?.value, $a("sharedFareDropping")?.value);
+          amount.value = fare === null ? "" : String(fare);
+        };
         const sharedStopAtOrder = (route, order) => (route?.stops || []).find((stop) => Number(stop.stop_order) === Number(order)) || null;
         const minutesToDuration = (minutes) => {
           const value = Math.max(0, Number(minutes) || 0);
@@ -10243,8 +10289,10 @@
         });
         if($a("sharedRouteCancelEdit"))$a("sharedRouteCancelEdit").addEventListener("click",()=>{editingSharedRouteId="";$a("sharedRouteName").value="";$a("sharedRouteForm").querySelector("button[type=submit]").textContent="Add Route";$a("sharedRouteCancelEdit").hidden=true;});
         if($a("sharedStopRoute"))$a("sharedStopRoute").addEventListener("change",()=>{editingSharedStopId="";clearSharedStopFields();$a("sharedStopSubmit").textContent="Add Stop";$a("sharedStopCancelEdit").hidden=true;renderSharedStops();});
-        if($a("sharedFareRoute"))$a("sharedFareRoute").addEventListener("change",loadSharedFares);
-        if($a("sharedFareType"))$a("sharedFareType").addEventListener("change",loadSharedFares);
+        if($a("sharedFareRoute"))$a("sharedFareRoute").addEventListener("change",()=>{loadSharedFares();updateSharedFareSuggestion();});
+        if($a("sharedFareType"))$a("sharedFareType").addEventListener("change",()=>{loadSharedFares();updateSharedFareSuggestion();});
+        if($a("sharedFareBoarding"))$a("sharedFareBoarding").addEventListener("change",updateSharedFareSuggestion);
+        if($a("sharedFareDropping"))$a("sharedFareDropping").addEventListener("change",updateSharedFareSuggestion);
         if($a("sharedStopCancelEdit"))$a("sharedStopCancelEdit").addEventListener("click",()=>{editingSharedStopId="";clearSharedStopFields();$a("sharedStopSubmit").textContent="Add Stop";$a("sharedStopCancelEdit").hidden=true;});
         if($a("sharedStopForm"))$a("sharedStopForm").addEventListener("submit",async(e)=>{
           e.preventDefault();
@@ -10277,7 +10325,9 @@
           if(submit.disabled)return;
           submit.disabled=true;
           try{
-            await req("rpc/app_admin_shared_route_save_fare",{method:"POST",body:JSON.stringify({p_route_id:$a("sharedFareRoute").value,p_bus_type:$a("sharedFareType").value,p_boarding_stop_id:$a("sharedFareBoarding").value,p_dropping_stop_id:$a("sharedFareDropping").value,p_fare:Number($a("sharedFareAmount").value)})});
+            const amount=Number($a("sharedFareAmount").value);
+            if(!Number.isFinite(amount)||amount<10||amount%10!==0)throw new Error("Fare must be at least ₹10 and a multiple of ₹10.");
+            await req("rpc/app_admin_shared_route_save_fare",{method:"POST",body:JSON.stringify({p_route_id:$a("sharedFareRoute").value,p_bus_type:$a("sharedFareType").value,p_boarding_stop_id:$a("sharedFareBoarding").value,p_dropping_stop_id:$a("sharedFareDropping").value,p_fare:amount})});
             $a("sharedFareAmount").value="";
             await finishSharedMutation("Route fare saved for every operator.");
           }catch(err){msg("Could not save fare: "+err.message,true);}
@@ -11528,6 +11578,60 @@ if (recentContainer) {
         }
         const esc = (v) => encodeURIComponent(String(v));
         const stopTime = (stop, field) => stop?.[field] || "—";
+        const busLayoutValue = (bus) => String(bus?.seat_layout || "2x2").trim().toLowerCase();
+        const isSleeperCombo = (bus) => /seater\s*\+\s*sleeper/i.test(String(bus?.bus_type || ""));
+        const lowerDeckSeatCount = (bus) => Math.ceil(Number(bus?.total_seats || 0) / 2);
+        const isSleeperSeat = (seatId, bus) => {
+          const layout = busLayoutValue(bus);
+          if (!isSleeperCombo(bus)) return /single_deck|double_deck/.test(layout);
+          if (layout.startsWith("single_deck:")) return true;
+          if (layout.startsWith("double_deck:")) return Number(seatId) > lowerDeckSeatCount(bus);
+          return false;
+        };
+        const displaySeatLabel = (seatId, bus = currentTrip?.bus) => {
+          const layout = busLayoutValue(bus);
+          const number = Number(seatId);
+          if (layout.startsWith("single_deck:")) return "S" + number;
+          if (layout.startsWith("double_deck:") && number > lowerDeckSeatCount(bus)) return "S" + (number - lowerDeckSeatCount(bus));
+          return String(number);
+        };
+        const seatFareForId = (seatId) => {
+          if (!currentTrip || currentFare <= 0) return 0;
+          const type = String(currentTrip.bus?.bus_type || "").trim().toLowerCase();
+          let multiplier = 1;
+          if (isSleeperCombo(currentTrip.bus)) {
+            const sleeper = isSleeperSeat(seatId, currentTrip.bus);
+            if (type.startsWith("non ac")) multiplier = sleeper ? (1.4 / 1.25) : 1;
+            else if (type.startsWith("ac")) multiplier = sleeper ? (1.75 / 1.5) : 1;
+          }
+          const boardingStop = currentStops.find((stop) => String(stop.id) === String(currentBoarding));
+          const departure = String(boardingStop?.departure_time || "");
+          const hour = Number(departure.slice(0, 2));
+          const isNightService = Number.isFinite(hour) && (hour >= 20 || hour < 5);
+          const stops = currentStops.slice().sort((a, b) => Number(a.stop_order) - Number(b.stop_order));
+          const from = stops.findIndex((stop) => String(stop.id) === String(currentBoarding));
+          const to = stops.findIndex((stop) => String(stop.id) === String(currentDropping));
+          const distanceKm = from >= 0 && to > from
+            ? stops.slice(from + 1, to + 1).reduce((sum, stop) => sum + Math.max(0, Number(stop.distance_km) || 0), 0)
+            : 0;
+          const busMultiplier = isSleeperCombo(currentTrip.bus)
+            ? (type.startsWith("non ac") ? 1.25 : 1.5)
+            : (type.startsWith("ac") ? 1.5 : 1);
+          const normalFare = distanceKm > 0 ? Math.max(10, Math.ceil(distanceKm * 2 / 10) * 10) : currentFare;
+          const suggestedCategoryFare = distanceKm > 0
+            ? Math.max(10, Math.ceil(normalFare * busMultiplier / 10) * 10)
+            : currentFare;
+          const adminAdjustment = suggestedCategoryFare > 0 ? currentFare / suggestedCategoryFare : 1;
+          const rate = isSleeperCombo(currentTrip.bus)
+            ? (type.startsWith("non ac") ? (isSleeperSeat(seatId, currentTrip.bus) ? 1.4 : 1.25) : (isSleeperSeat(seatId, currentTrip.bus) ? 1.75 : 1.5))
+            : (type.startsWith("ac") ? 1.5 : 1);
+          const raw = (distanceKm > 0 ? normalFare * rate * adminAdjustment : currentFare * multiplier) * (isNightService ? 1.1 : 1);
+          return Math.max(10, Math.ceil(raw / 10) * 10);
+        };
+        const totalFareForSeats = (seatIds) => (seatIds || []).reduce((total, id) => total + seatFareForId(id), 0);
+        const updateBookingTotal = () => {
+          q("total").textContent = `Seats: ${seats.length} | Total: ${money(totalFareForSeats(seats))}`;
+        };
         function addInfoFact(parent, labelText, valueText, className) {
           const fact = document.createElement("div");
           fact.className = className;
@@ -11605,7 +11709,11 @@ if (recentContainer) {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "seat";
-            btn.textContent = "Seat " + i;
+            btn.textContent = displaySeatLabel(i, currentTrip.bus);
+            const seatFare = seatFareForId(i);
+            const sleeperSeat = isSleeperSeat(i, currentTrip.bus);
+            btn.title = (sleeperSeat ? "Sleeper berth" : "Seater seat") + " · ₹" + seatFare;
+            if (sleeperSeat) btn.classList.add("sleeper-seat");
             if (occupied.has(i)) {
               btn.disabled = true;
               btn.title = "Already booked for an overlapping route segment";
@@ -11622,7 +11730,7 @@ if (recentContainer) {
                   seats.push(i);
                   btn.classList.add("selected");
                 }
-                updateTotal();
+                updateBookingTotal();
               };
             }
             list.appendChild(btn);
@@ -11633,7 +11741,7 @@ if (recentContainer) {
               list.appendChild(aisle);
             }
           }
-          updateTotal();
+          updateBookingTotal();
         }
         // Replace current search with trip/date/route search.
         const stopSuggestionCache = new Map();
@@ -11700,7 +11808,7 @@ if (recentContainer) {
             const tripFilter=esc("("+tripIds.join(",")+")"),busFilter=esc("("+busIds.join(",")+")");
             const [busRows,allStops,allFares]=tripIds.length?await Promise.all([
               rest(`/app_buses?select=id,operator_id,bus_name,bus_number,bus_type,total_seats,seat_layout,active&id=in.${busFilter}&active=eq.true`),
-              rest(`/app_trip_stops?select=id,trip_id,stop_order,stop_name,arrival_time,departure_time&trip_id=in.${tripFilter}&order=trip_id.asc,stop_order.asc`),
+              rest(`/app_trip_stops?select=id,trip_id,stop_order,stop_name,arrival_time,departure_time,distance_km&trip_id=in.${tripFilter}&order=trip_id.asc,stop_order.asc`),
               rest(`/app_trip_fares?select=trip_id,boarding_stop_id,dropping_stop_id,fare&trip_id=in.${tripFilter}`),
             ]):[[],[],[]];
             const cards = [];
@@ -11910,7 +12018,7 @@ if (recentContainer) {
           const nextPassengerSeatKey = [...seats].sort((a, b) => a - b).join(",");
           if (passengerSeatKey !== nextPassengerSeatKey) {
             const previousPassengerData = new Map([...q("passengers").children].map((card) => {
-              const seatNo = Number(card.querySelector("h3")?.textContent.match(/Seat (\d+)/)?.[1]);
+              const seatNo = Number(card.dataset.seatId || card.querySelector("h3")?.textContent.match(/Seat (\d+)/)?.[1]);
               return [seatNo, {
                 name: card.querySelector('[name="name"]')?.value || "",
                 age: card.querySelector('[name="age"]')?.value || "",
@@ -11921,7 +12029,8 @@ if (recentContainer) {
             [...seats].sort((a, b) => a - b).forEach((seat, i) => {
               const box = document.createElement("div");
               box.className = "passenger passenger-form-card";
-              addText("h3", `Passenger ${i + 1} — Seat No. ${seat}`, box);
+              box.dataset.seatId = String(seat);
+              addText("h3", `Passenger ${i + 1} — Seat No. ${displaySeatLabel(seat)}`, box);
               const appendField = (labelText, input, name) => {
                 const field = document.createElement("div");
                 field.className = "passenger-field" + (name === "name" ? " passenger-field-name" : "");
@@ -12053,9 +12162,9 @@ if (recentContainer) {
           addReviewDetail("Bus Name", currentTrip.bus.bus_name || "—");
           addReviewDetail("Bus Number", currentTrip.bus.bus_number || "Not provided");
           addReviewDetail("Bus Type", currentTrip.bus.bus_type || "Bus");
-          addReviewDetail("Seat No.", [...seats].sort((a, b) => a - b).join(", "));
+          addReviewDetail("Seat No.", [...seats].sort((a, b) => a - b).map((seat) => displaySeatLabel(seat)).join(", "));
           addReviewDetail("Passengers", people.map((person, i) => `${i + 1}. ${person.name} · Age ${person.age} · ${person.gender[0].toUpperCase() + person.gender.slice(1)}`).join("; "));
-          addReviewDetail("Total Fare", money(currentFare * seats.length));
+          addReviewDetail("Total Fare", money(totalFareForSeats(seats)));
           q("passengerPanel").hidden = true;
           q("reviewPanel").hidden = false;
           recordAppNavigation("reviewPanel", "bookTab");
@@ -12078,6 +12187,19 @@ if (recentContainer) {
             const selectedPaymentMethod = q("paymentMethod").value || "cash";
             const selectedBoarding = currentStops.find((x) => x.id === currentBoarding);
             const selectedDropping = currentStops.find((x) => x.id === currentDropping);
+            let confirmedFare = totalFareForSeats(sortedSeats);
+            try {
+              const serverFare = await rpc("app_trip_calculate_booking_fare", {
+                p_trip_id: currentTrip.trip.id,
+                p_boarding_stop_id: currentBoarding,
+                p_dropping_stop_id: currentDropping,
+                p_seats: sortedSeats,
+              });
+              confirmedFare = Number(Array.isArray(serverFare) ? serverFare[0] : serverFare);
+              if (!Number.isFinite(confirmedFare) || confirmedFare < 10) throw new Error("The server returned an invalid fare.");
+            } catch (fareError) {
+              throw new Error("Seat-based fares need the latest Supabase fare migration. Apply 202611220007_auto_category_fares.sql, then try again.");
+            }
             const booking = {
               id: "",
               bus: currentTrip.bus.bus_name,
@@ -12090,8 +12212,14 @@ if (recentContainer) {
               to: selectedDropping.stop_name,
               date: journeyDate,
               seats: sortedSeats,
-              people: reviewPeople,
-              total: Number(currentFare * sortedSeats.length),
+              seatLabels: sortedSeats.map((seat) => displaySeatLabel(seat)),
+              people: reviewPeople.map((person, i) => ({
+                ...person,
+                seat_no: sortedSeats[i],
+                seat_label: displaySeatLabel(sortedSeats[i]),
+                seat_fare: seatFareForId(sortedSeats[i]),
+              })),
+              total: confirmedFare,
               paymentMethod: selectedPaymentMethod,
               paymentStatus: selectedPaymentMethod === "cash" ? "unpaid" : "pending",
               status: selectedPaymentMethod === "cash" ? "confirmed" : "pending",
@@ -12109,6 +12237,8 @@ if (recentContainer) {
               p_customer_phone: readDemoAuthSession()?.user?.user_metadata?.mobile || readDemoAuthSession()?.user?.user_metadata?.phone || "",
               p_passenger_details: reviewPeople.map((p, i) => ({
                 seat_no: sortedSeats[i],
+                seat_label: displaySeatLabel(sortedSeats[i]),
+                seat_fare: seatFareForId(sortedSeats[i]),
                 name: p.name,
                 age: p.age,
                 gender: p.gender,
@@ -12121,8 +12251,14 @@ if (recentContainer) {
               const pending = { booking, orderId: "" };
               sessionStorage.setItem("bookmyseat_cashfree_pending", JSON.stringify(pending));
               bookingPayload.client_platform = "web";
+              bookingPayload.expected_total_fare = booking.total;
+              bookingPayload.total_fare = booking.total;
               const order = await cashfreeFunction("cashfree-create-order", bookingPayload);
               if (!order.order_id || !order.payment_session_id) throw new Error("Cashfree did not return a payment session.");
+              const cashfreeOrderAmount = Number(order.order_amount ?? order.amount);
+              if (!Number.isFinite(cashfreeOrderAmount) || Math.abs(cashfreeOrderAmount - confirmedFare) > 0.01) {
+                throw new Error("Cashfree order amount does not match the seat-based fare. Update cashfree-create-order to calculate the order using app_trip_calculate_booking_fare before enabling online payment.");
+              }
               if (!["sandbox","production"].includes(String(order.mode||"").toLowerCase())) throw new Error("Cashfree environment is not configured on the server.");
               pending.orderId = order.order_id;
               sessionStorage.setItem("bookmyseat_cashfree_pending", JSON.stringify(pending));
@@ -12143,7 +12279,7 @@ if (recentContainer) {
             const row = Array.isArray(data) ? data[0] : data;
             if (!row?.booking_pnr) throw new Error("The booking response did not include a PNR.");
             booking.id = row.booking_pnr;
-            booking.total = Number(row.total_fare);
+            booking.total = confirmedFare;
             renderTicket(booking);
             q("ticketPanel").dataset.newBookingConfirmation = "true";
             q("results").hidden = true;
@@ -12233,7 +12369,7 @@ if (recentContainer) {
               ["Bus Name", x.bus_name],
               ["Bus Number", x.bus_number],
               ["Bus Type", x.bus_type],
-              ["Seat No.", (x.seats || []).join(", ")],
+              ["Seat No.", seatLabelsForBooking(x).join(", ")],
               ["Total Fare", money(x.total_fare)],
               [
                 "Booked At",
