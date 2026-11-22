@@ -5879,25 +5879,45 @@
           if (bar) bar.classList.remove("active");
         }
         window.fetch = function (...args) {
-          const requestUrl=String(args[0]?.url||args[0]||"");
+          const requestUrl = String(args[0]?.url || args[0] || "");
           // Typeahead requests are intentionally quiet; a full-screen network
           // overlay while a customer types looks like the page is refreshing.
-          if(requestUrl.includes("/rpc/app_search_stop_names"))return nativeFetch(...args);
+          if (requestUrl.includes("/rpc/app_search_stop_names")) return nativeFetch(...args);
+
+          const requestInit = args[1] || {};
+          const isSupabaseRequest = requestUrl.includes(".supabase.co/");
+          let requestPromise;
+          if (isSupabaseRequest && typeof AbortController !== "undefined") {
+            const controller = new AbortController();
+            let timedOut = false;
+            const callerSignal = requestInit.signal || (typeof Request !== "undefined" && args[0] instanceof Request ? args[0].signal : null);
+            const abortFromCaller = () => controller.abort();
+            if (callerSignal?.aborted) controller.abort();
+            else callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
+            const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 15000);
+            requestPromise = nativeFetch(args[0], { ...requestInit, signal: controller.signal }).catch((error) => {
+              if (timedOut) throw new Error("Database request timed out after 15 seconds. Check your connection and retry.");
+              throw error;
+            }).finally(() => {
+              clearTimeout(timeout);
+              callerSignal?.removeEventListener("abort", abortFromCaller);
+            });
+          } else {
+            requestPromise = nativeFetch(...args);
+          }
+
           pending++;
           if (pending === 1) {
             startedAt = Date.now();
             clearTimeout(hideTimer);
             showTimer = setTimeout(show, 220);
           }
-          return nativeFetch(...args).finally(() => {
+          return requestPromise.finally(() => {
             pending = Math.max(0, pending - 1);
             if (pending === 0) {
               clearTimeout(showTimer);
               const elapsed = Date.now() - startedAt;
-              hideTimer = setTimeout(
-                hide,
-                Math.max(120, elapsed < 450 ? 450 - elapsed : 120),
-              );
+              hideTimer = setTimeout(hide, Math.max(120, elapsed < 450 ? 450 - elapsed : 120));
             }
           });
         };
