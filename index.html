@@ -9968,14 +9968,35 @@
         };
         const api = "/rest/v1/";
         const enc = (v) => encodeURIComponent(v);
-        const req = (path, options = {}) =>
-          adminBusRequest(api + path, {
+        const legacySharedRouteRpc = {
+          app_admin_shared_route_save: "app_shared_route_save",
+          app_admin_shared_route_create_return: "app_shared_route_create_return",
+          app_admin_shared_route_delete: "app_shared_route_delete",
+          app_admin_shared_route_save_stop: "app_shared_route_save_stop",
+          app_admin_shared_route_delete_stop: "app_shared_route_delete_stop",
+          app_admin_shared_route_save_fare: "app_shared_route_save_fare",
+          app_admin_shared_route_delete_fare: "app_shared_route_delete_fare",
+        };
+        const req = async (path, options = {}) => {
+          const requestOptions = {
             ...options,
             headers: {
               Prefer: "return=representation",
               ...(options.headers || {}),
             },
-          });
+          };
+          try {
+            return await adminBusRequest(api + path, requestOptions);
+          } catch (error) {
+            const legacyRpc = path.startsWith("rpc/") ? legacySharedRouteRpc[path.slice(4)] : null;
+            const detail = String(error?.message || "").toLowerCase();
+            const endpointMissing = detail.includes("pgrst202") || detail.includes("schema cache") || detail.includes("could not find the function");
+            if (!legacyRpc || !endpointMissing) throw error;
+            return await adminBusRequest(api + "rpc/" + legacyRpc, requestOptions);
+          }
+        };
+        const mutateSharedRoute = (rpcName, payload) =>
+          req("rpc/" + rpcName, {method:"POST",body:JSON.stringify(payload)});
         const fill = (id, rows, value, label, first = "Select...") => {
           const el = $a(id);
           if (!el) return;
@@ -10091,6 +10112,23 @@
             });
           } catch(e){out.textContent="Could not load route fares: "+e.message;}
         };
+        const deleteSharedRouteAndReturn = async (route) => {
+          const returnRouteId = route.return_route_id || "";
+          try {
+            await mutateSharedRoute("app_admin_shared_route_delete", {p_route_id:route.route_id});
+          } catch (error) {
+            if (!returnRouteId) throw error;
+            await mutateSharedRoute("app_admin_shared_route_delete", {p_route_id:returnRouteId});
+            await mutateSharedRoute("app_admin_shared_route_delete", {p_route_id:route.route_id});
+          }
+          if (returnRouteId) {
+            await loadSharedCatalog();
+            if (sharedRoutes.some((item) => String(item.route_id) === String(returnRouteId))) {
+              await mutateSharedRoute("app_admin_shared_route_delete", {p_route_id:returnRouteId});
+            }
+          }
+          await finishSharedMutation(returnRouteId ? "Route and return direction deleted." : "Route deleted.");
+        };
         async function loadSharedCatalog() {
           const rows = await req("rpc/app_shared_route_catalog",{method:"POST",body:"{}"});
           sharedRoutes = Array.isArray(rows) ? rows : [];
@@ -10098,7 +10136,7 @@
           fill("sharedStopRoute",sharedRoutes,"route_id",(x)=>x.route_name,"Select route...");
           fill("sharedFareRoute",sharedRoutes,"route_id",(x)=>x.route_name,"Select route...");
           const cards=$a("sharedRoutesList"); if(cards){cards.replaceChildren(); if(!sharedRoutes.length)cards.textContent="No routes yet. Add the first route above.";
-            sharedRoutes.forEach((route)=>{const card=document.createElement("div");card.className="shared-route-row";const copy=document.createElement("div");copy.innerHTML="<strong></strong><span></span>";copy.querySelector("strong").textContent=route.route_name+(route.return_route_name?"  ↔  "+route.return_route_name:"");copy.querySelector("span").textContent=(route.stop_count||0)+" stops · "+Number(route.distance_km||0).toFixed(1)+" km · "+Math.floor(Number(route.segment_minutes||0)/60)+" hr "+(Number(route.segment_minutes||0)%60)+" min";card.appendChild(copy);const actions=document.createElement("div");actions.className="shared-route-actions";const edit=document.createElement("button");edit.type="button";edit.textContent="Edit route";edit.onclick=()=>{editingSharedRouteId=route.route_id;$a("sharedRouteName").value=route.route_name;$a("sharedRouteForm").querySelector("button[type=submit]").textContent="Save Route";$a("sharedRouteCancelEdit").hidden=false;$a("sharedRouteForm").scrollIntoView({behavior:"smooth",block:"center"});};const manage=document.createElement("button");manage.type="button";manage.textContent="Manage stops";manage.onclick=()=>{document.querySelector('.admin-nav-btn[data-admin-target="stops"]')?.click();$a("sharedStopRoute").value=route.route_id;renderSharedStops();$a("sharedRouteStopsCard").scrollIntoView({behavior:"smooth",block:"start"});};const fares=document.createElement("button");fares.type="button";fares.textContent="Manage fares";fares.onclick=()=>{document.querySelector('.admin-nav-btn[data-admin-target="route-fares"]')?.click();$a("sharedFareRoute").value=route.route_id;loadSharedFares();$a("sharedRouteFaresCard").scrollIntoView({behavior:"smooth",block:"start"});};actions.append(edit,manage,fares);if(!route.return_route_id){const ret=document.createElement("button");ret.type="button";ret.textContent="Add return";ret.onclick=async()=>{try{await req("rpc/app_admin_shared_route_create_return",{method:"POST",body:JSON.stringify({p_route_id:route.route_id})});await finishSharedMutation("Return route added with reversed stops, distance, time and fares.");}catch(e){msg(e.message,true);}};actions.appendChild(ret);}const del=document.createElement("button");del.type="button";del.className="danger";del.textContent="Delete route";del.onclick=async()=>{if(!confirm("Delete this route for all operators?"))return;try{await req("rpc/app_admin_shared_route_delete",{method:"POST",body:JSON.stringify({p_route_id:route.route_id})});await finishSharedMutation("Route deleted.");}catch(e){msg(e.message,true);}};actions.appendChild(del);card.appendChild(actions);cards.appendChild(card);});}
+            sharedRoutes.filter((route)=>!route.return_route_id||String(route.route_id).localeCompare(String(route.return_route_id))<0).forEach((route)=>{const card=document.createElement("div");card.className="shared-route-row";const copy=document.createElement("div");copy.innerHTML="<strong></strong><span></span>";copy.querySelector("strong").textContent=route.route_name+(route.return_route_name?"  ↔  "+route.return_route_name:"");copy.querySelector("span").textContent=(route.stop_count||0)+" stops · "+Number(route.distance_km||0).toFixed(1)+" km · "+Math.floor(Number(route.segment_minutes||0)/60)+" hr "+(Number(route.segment_minutes||0)%60)+" min";card.appendChild(copy);const actions=document.createElement("div");actions.className="shared-route-actions";const edit=document.createElement("button");edit.type="button";edit.textContent="Edit route";edit.onclick=()=>{editingSharedRouteId=route.route_id;$a("sharedRouteName").value=route.route_name;$a("sharedRouteForm").querySelector("button[type=submit]").textContent="Save Route";$a("sharedRouteCancelEdit").hidden=false;$a("sharedRouteForm").scrollIntoView({behavior:"smooth",block:"center"});};const manage=document.createElement("button");manage.type="button";manage.textContent="Manage stops";manage.onclick=()=>{document.querySelector('.admin-nav-btn[data-admin-target="stops"]')?.click();$a("sharedStopRoute").value=route.route_id;renderSharedStops();$a("sharedRouteStopsCard").scrollIntoView({behavior:"smooth",block:"start"});};const fares=document.createElement("button");fares.type="button";fares.textContent="Manage fares";fares.onclick=()=>{document.querySelector('.admin-nav-btn[data-admin-target="route-fares"]')?.click();$a("sharedFareRoute").value=route.route_id;loadSharedFares();$a("sharedRouteFaresCard").scrollIntoView({behavior:"smooth",block:"start"});};actions.append(edit,manage,fares);if(!route.return_route_id){const ret=document.createElement("button");ret.type="button";ret.textContent="Add return";ret.onclick=async()=>{try{await req("rpc/app_admin_shared_route_create_return",{method:"POST",body:JSON.stringify({p_route_id:route.route_id})});await finishSharedMutation("Return route added with reversed stops, distance, time and fares.");}catch(e){msg(e.message,true);}};actions.appendChild(ret);}const del=document.createElement("button");del.type="button";del.className="danger";del.textContent=route.return_route_id?"Delete route pair":"Delete route";del.onclick=async()=>{if(!confirm(route.return_route_id?"Delete this route and its return direction for all operators?":"Delete this route for all operators?"))return;try{await deleteSharedRouteAndReturn(route);}catch(e){msg(e.message,true);}};actions.appendChild(del);card.appendChild(actions);cards.appendChild(card);});}
           const stopSelect=$a("sharedStopRoute"),fareSelect=$a("sharedFareRoute");
           if(stopSelect&&!stopSelect.value&&sharedRoutes.length)stopSelect.value=sharedRoutes[0].route_id;
           if(fareSelect&&!fareSelect.value&&sharedRoutes.length)fareSelect.value=sharedRoutes[0].route_id;
