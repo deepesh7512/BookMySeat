@@ -5691,7 +5691,7 @@
                 <label>Journey Date</label
                 ><input id="currentTripDate" type="date" required />
                 <label>Bus departure time</label><input id="currentTripDeparture" type="time" required />
-                <label>Final stop arrival time</label><input id="currentTripArrival" type="time" required />
+                <p id="currentTripArrivalPreview" class="muted" aria-live="polite">Destination arrival will be calculated from this route's saved travel times.</p>
                 <button type="submit">Create Trip & Copy Stoppages</button>
               </form>
               <div id="currentTripsAdmin"></div>
@@ -11441,6 +11441,28 @@ if (recentContainer) {
           ).textContent = "Add Stoppage";
           msg("Stoppage saved.");
         });
+        const formatTripClock = (minute) => {
+          const wrapped = ((minute % 1440) + 1440) % 1440;
+          return String(Math.floor(wrapped / 60)).padStart(2, "0") + ":" + String(wrapped % 60).padStart(2, "0") + ":00";
+        };
+        const updateCurrentTripArrivalPreview = () => {
+          const preview = $a("currentTripArrivalPreview");
+          if (!preview) return;
+          const routeId = $a("currentTripRoute")?.value;
+          const stops = routeStops.filter((stop) => String(stop.route_id) === String(routeId)).sort((a, b) => Number(a.stop_order) - Number(b.stop_order));
+          const totalMinutes = stops.slice(1).reduce((sum, stop) => sum + Math.max(0, Number(stop.segment_minutes) || 0), 0);
+          const departure = $a("currentTripDeparture")?.value;
+          if (stops.length < 2) { preview.textContent = "Select a route with at least two stops."; return; }
+          if (totalMinutes <= 0) { preview.textContent = "Add travel times to this route's stop segments to calculate destination arrival."; return; }
+          if (!departure) { preview.textContent = "Destination arrival will be calculated from this route's saved travel times."; return; }
+          const [hour, minute] = departure.split(":").map(Number);
+          const arrivalMinute = hour * 60 + minute + totalMinutes;
+          const time = formatTripClock(arrivalMinute).slice(0, 5);
+          const dayOffset = Math.floor(arrivalMinute / 1440);
+          preview.textContent = "Estimated destination arrival: " + time + (dayOffset > 0 ? " (next day)" : "");
+        };
+        ["currentTripRoute", "currentTripDeparture"].forEach((id) => $a(id)?.addEventListener("input", updateCurrentTripArrivalPreview));
+        ["currentTripRoute"].forEach((id) => $a(id)?.addEventListener("change", updateCurrentTripArrivalPreview));
         bind("currentTripForm", async () => {
           const routeId = $a("currentTripRoute").value;
           const route = routes.find((x) => x.id === routeId);
@@ -11453,13 +11475,13 @@ if (recentContainer) {
               "Add at least two stops to the route before creating a trip.",
             );
           const date = $a("currentTripDate").value;
-          const departure=$a("currentTripDeparture").value, finalArrival=$a("currentTripArrival").value;
-          if(!departure||!finalArrival)throw Error("Set the bus departure and final stop arrival times.");
+          const departure = $a("currentTripDeparture").value;
+          if (!departure) throw Error("Set the bus departure time.");
           const toMinutes=(value)=>{const [h,m]=value.split(":").map(Number);return h*60+m;};
-          const startMinute=toMinutes(departure);let endMinute=toMinutes(finalArrival);if(endMinute<startMinute)endMinute+=1440;
-          const actualDuration=endMinute-startMinute,totalSegmentMinutes=stops.reduce((sum,s)=>sum+Number(s.segment_minutes||0),0),totalDistance=stops.reduce((sum,s)=>sum+Number(s.distance_km||0),0);
-          let elapsedMinutes=0,elapsedDistance=0;
-          const formatTripTime=(minute)=>{const wrapped=((minute%1440)+1440)%1440;return String(Math.floor(wrapped/60)).padStart(2,"0")+":"+String(wrapped%60).padStart(2,"0")+":00";};
+          const startMinute = toMinutes(departure);
+          const totalSegmentMinutes = stops.slice(1).reduce((sum, stop) => sum + Math.max(0, Number(stop.segment_minutes) || 0), 0);
+          if (totalSegmentMinutes <= 0) throw Error("Add travel times to the route's stop segments before scheduling this trip.");
+          let elapsedMinutes = 0;
           const created = await req("app_trips", {
             method: "POST",
             body: JSON.stringify({
@@ -11475,17 +11497,15 @@ if (recentContainer) {
               method: "POST",
               body: JSON.stringify(
                 stops.map((s,index) => {
-                  if(index>0){elapsedMinutes+=Number(s.segment_minutes||0);elapsedDistance+=Number(s.distance_km||0);}
-                  const last=index===stops.length-1;
-                  let intermediateTime=null;
-                  if(index>0&&!last){const fraction=totalSegmentMinutes>0?elapsedMinutes/totalSegmentMinutes:totalDistance>0?elapsedDistance/totalDistance:index/(stops.length-1);intermediateTime=formatTripTime(startMinute+Math.round(actualDuration*fraction));}
+                  if (index > 0) elapsedMinutes += Math.max(0, Number(s.segment_minutes) || 0);
+                  const stopTime = index === 0 ? formatTripClock(startMinute) : formatTripClock(startMinute + elapsedMinutes);
                   return {
                   trip_id: trip.id,
                   original_stop_id: s.id,
                   stop_order: s.stop_order,
                   stop_name: s.stop_name,
-                  arrival_time: index===0 ? s.arrival_time : last ? finalArrival : intermediateTime,
-                  departure_time: index===0 ? departure : last ? s.departure_time : intermediateTime,
+                  arrival_time: stopTime,
+                  departure_time: stopTime,
                   distance_km: Number(s.distance_km || 0),
                   segment_minutes: Number(s.segment_minutes || 0),
                 };}),
