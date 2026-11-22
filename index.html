@@ -6,7 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Book My Seat</title>
     <link rel="icon" type="image/svg+xml" href="./assets/book-my-seat-mark.svg" />
-    <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
+    <link rel="preconnect" href="https://yqqkikkeimqykxkkssov.supabase.co" crossorigin />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <style>
       * {
         box-sizing: border-box;
@@ -4896,7 +4897,7 @@
       }
 
       </style>
-      <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+      <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body>
     <div id="appBusyBar" aria-hidden="true"></div>
@@ -11584,6 +11585,21 @@ if (recentContainer) {
           if (!r.ok) throw new Error(d?.message || d?.details || String(d));
           return d;
         }
+        let cashfreeSdkPromise = null;
+        async function ensureCashfreeSdk() {
+          if (window.Cashfree) return window.Cashfree;
+          if (!cashfreeSdkPromise) {
+            cashfreeSdkPromise = new Promise((resolve, reject) => {
+              const script = document.createElement("script");
+              script.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
+              script.async = true;
+              script.onload = () => window.Cashfree ? resolve(window.Cashfree) : reject(new Error("Cashfree Checkout did not initialize."));
+              script.onerror = () => reject(new Error("Cashfree Checkout could not load. Check your connection and retry."));
+              document.head.appendChild(script);
+            }).catch((error) => { cashfreeSdkPromise = null; throw error; });
+          }
+          return cashfreeSdkPromise;
+        }
         async function cashfreeFunction(name, payload) {
           const auth = readDemoAuthSession();
           if (!auth?.access_token) throw new Error("Please sign in again before paying.");
@@ -12294,7 +12310,7 @@ if (recentContainer) {
               p_customer_email: readDemoAuthSession()?.email || null,
             };
             if (selectedPaymentMethod === "upi") {
-              if (!window.Cashfree) throw new Error("Cashfree Checkout did not load. Refresh the page and retry.");
+              await ensureCashfreeSdk();
               const pending = { booking, orderId: "" };
               sessionStorage.setItem("bookmyseat_cashfree_pending", JSON.stringify(pending));
               bookingPayload.client_platform = "web";
