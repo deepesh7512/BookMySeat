@@ -5586,7 +5586,7 @@
               <h3>Routes</h3>
               <p>Add and manage route directions. Stops and fares have their own tabs.</p>
               <form id="sharedRouteForm">
-                <label>Route Name (for example, Shahdol to Rewa)</label>
+                <label for="sharedRouteName">Route Name (for example, Shahdol to Rewa)</label>
                 <input id="sharedRouteName" list="sharedRouteSuggestions" placeholder="Search a route or add a new one" required />
                 <datalist id="sharedRouteSuggestions"></datalist>
                 <button type="submit">Add Route</button>
@@ -5601,11 +5601,12 @@
               <div class="admin-card" id="sharedRouteStopsCard">
                 <h4>Route Master Stops</h4>
                 <form id="sharedStopForm">
-                  <label>Route</label><select id="sharedStopRoute" required></select>
-                  <label>Stop Name</label><input id="sharedStopName" required />
-                  <label>Stop Order</label><input id="sharedStopOrder" type="number" min="1" required />
-                  <label>Distance from previous stop (km)</label><input id="sharedStopDistance" type="number" min="0" step="0.01" value="0" required />
-                  <label>Travel time from previous stop (HH:mm)</label><input id="sharedStopDuration" type="text" inputmode="numeric" placeholder="01:30" pattern="[0-9]{1,3}:[0-5][0-9]" value="00:00" required />
+                  <label for="sharedStopRoute">Route</label><select id="sharedStopRoute" required></select>
+                  <label for="sharedStopName">Stop Name</label><input id="sharedStopName" required />
+                  <label for="sharedStopOrder">Stop Order</label><input id="sharedStopOrder" type="number" min="1" required />
+                  <label for="sharedStopDistance">Distance from previous stop (km)</label><input id="sharedStopDistance" type="number" min="0" step="0.01" value="0" required />
+                  <label for="sharedStopDuration" id="sharedStopDurationLabel">Travel time from previous stop (HH:mm)</label><input id="sharedStopDuration" type="text" inputmode="numeric" placeholder="01:30" pattern="[0-9]{1,3}:[0-5][0-9]" value="00:00" required />
+                  <small id="sharedStopSplitHint" aria-live="polite">Choose a route order. In-between insertions split travel time evenly.</small>
                   <button id="sharedStopSubmit" type="submit">Add Stop</button>
                   <button id="sharedStopCancelEdit" type="button" hidden>Cancel Edit</button>
                 </form>
@@ -5619,14 +5620,14 @@
               <div class="admin-card" id="sharedRouteFaresCard">
                 <h4>Bus Fares</h4>
                 <form id="sharedFareForm">
-                  <label>Route</label><select id="sharedFareRoute" required></select>
-                  <label>Bus category</label>
+                  <label for="sharedFareRoute">Route</label><select id="sharedFareRoute" required></select>
+                  <label for="sharedFareType">Bus category</label>
                   <select id="sharedFareType" required>
                     <option>Non AC Seater</option><option>Non AC Sleeper</option><option>AC Seater</option><option>AC Sleeper</option>
                   </select>
-                  <label>Boarding stop</label><select id="sharedFareBoarding" required></select>
-                  <label>Destination stop</label><select id="sharedFareDropping" required></select>
-                  <label>Fare (₹)</label><input id="sharedFareAmount" type="number" min="1" step="0.01" required />
+                  <label for="sharedFareBoarding">Boarding stop</label><select id="sharedFareBoarding" required></select>
+                  <label for="sharedFareDropping">Destination stop</label><select id="sharedFareDropping" required></select>
+                  <label for="sharedFareAmount">Fare (₹)</label><input id="sharedFareAmount" type="number" min="1" step="0.01" required />
                   <button type="submit">Save Fare</button>
                 </form>
                 <div id="sharedFaresList"></div>
@@ -6052,6 +6053,14 @@
           return "";
         }
       }
+      function expireAdminSession() {
+        try {
+          sessionStorage.removeItem("apniBus_admin_session");
+          sessionStorage.removeItem("apniBus_admin_access_token");
+          sessionStorage.removeItem("apniBus_admin_refresh_token");
+        } catch (_) {}
+        window.dispatchEvent(new CustomEvent("admin-session-expired"));
+      }
       async function adminAuthRequest(path, options = {}) {
         const response = await fetch(SUPABASE_URL.replace(/\/$/, "") + path, {
           ...options,
@@ -6120,8 +6129,10 @@
       async function adminBusRequest(path, options = {}) {
         const { includeHeaders = false, ...requestOptions } = options;
         let token = getAdminAccessToken();
-        if (!token)
+        if (!token) {
+          expireAdminSession();
           throw new Error("Your admin session has expired. Please log in again.");
+        }
         const send = (accessToken) =>
           fetch(SUPABASE_URL.replace(/\/$/, "") + path, {
             ...requestOptions,
@@ -6134,8 +6145,17 @@
           });
         let response = await send(token);
         if (response.status === 401) {
-          token = await refreshAdminAccessToken();
-          response = await send(token);
+          try {
+            token = await refreshAdminAccessToken();
+            response = await send(token);
+          } catch (_) {
+            expireAdminSession();
+            throw new Error("Your admin session has expired. Please log in again.");
+          }
+          if (response.status === 401) {
+            expireAdminSession();
+            throw new Error("Your admin session has expired. Please log in again.");
+          }
         }
         const raw = await response.text();
         let data = null;
@@ -9770,6 +9790,11 @@
           adminPanel.hidden = false;
           renderAdmin();
         }
+        window.addEventListener("admin-session-expired", () => {
+          stopAdminNotificationRealtime().catch(() => {});
+          openAdminLogin();
+          message.textContent = "Admin session expired. Please log in again.";
+        });
         loginForm.addEventListener("submit", async function (event) {
           event.preventDefault();
           const email = document
@@ -9964,19 +9989,52 @@
         let sharedRoutes = [];
         let editingSharedStopId = "";
         let editingSharedRouteId = "";
+        let sharedStopDurationEdited = false;
         const sharedFareTypes = ["Non AC Seater", "Non AC Sleeper", "AC Seater", "AC Sleeper"];
         const selectedSharedRoute = (id) => sharedRoutes.find((route) => route.route_id === $a(id)?.value);
+        const sharedStopAtOrder = (route, order) => (route?.stops || []).find((stop) => Number(stop.stop_order) === Number(order)) || null;
+        const minutesToDuration = (minutes) => {
+          const value = Math.max(0, Number(minutes) || 0);
+          return Math.floor(value / 60).toString().padStart(2, "0") + ":" + (value % 60).toString().padStart(2, "0");
+        };
+        const updateSharedStopTimeHint = () => {
+          const route = selectedSharedRoute("sharedStopRoute");
+          const order = Number($a("sharedStopOrder")?.value);
+          const followingStop = sharedStopAtOrder(route, order);
+          const isInsertion = !editingSharedStopId && order > 1 && followingStop;
+          const label = $a("sharedStopDurationLabel");
+          const hint = $a("sharedStopSplitHint");
+          if (label) label.textContent = isInsertion ? "Total travel time for this segment (HH:mm)" : "Travel time from previous stop (HH:mm)";
+          if (isInsertion && !sharedStopDurationEdited && $a("sharedStopDuration")) {
+            $a("sharedStopDuration").value = minutesToDuration(followingStop.segment_minutes);
+          } else if (!isInsertion && !editingSharedStopId && !sharedStopDurationEdited && $a("sharedStopDuration")) {
+            $a("sharedStopDuration").value = "00:00";
+          }
+          if (!hint) return;
+          if (isInsertion) {
+            const parts = ($a("sharedStopDuration")?.value || "00:00").split(":").map(Number);
+            const total = parts.length === 2 && parts.every(Number.isFinite) ? parts[0] * 60 + parts[1] : 0;
+            const first = Math.floor(total / 2);
+            hint.textContent = "Automatic split: " + minutesToDuration(first) + " + " + minutesToDuration(total - first) + ". Review segment distance after insertion.";
+          } else {
+            hint.textContent = "For an in-between stop, the entered total time is split evenly. Review segment distance after insertion.";
+          }
+        };
         const clearSharedStopFields = () => {
           ["sharedStopName","sharedStopDistance","sharedStopDuration"].forEach((id)=>{if($a(id))$a(id).value="";});
           if($a("sharedStopDistance"))$a("sharedStopDistance").value="0";
           if($a("sharedStopDuration"))$a("sharedStopDuration").value="00:00";
+          sharedStopDurationEdited = false;
           const route=selectedSharedRoute("sharedStopRoute"),stops=route?.stops||[];
           if($a("sharedStopOrder"))$a("sharedStopOrder").value=stops.reduce((max,stop)=>Math.max(max,Number(stop.stop_order)||0),0)+1;
+          updateSharedStopTimeHint();
         };
         const renderSharedStops = () => {
           const route = selectedSharedRoute("sharedStopRoute");
           const stops = route?.stops || [];
           if (!editingSharedStopId && $a("sharedStopOrder")) $a("sharedStopOrder").value = stops.reduce((max, stop) => Math.max(max, Number(stop.stop_order)||0), 0) + 1;
+          if ($a("sharedStopOrder")) $a("sharedStopOrder").max = String(stops.reduce((max, stop) => Math.max(max, Number(stop.stop_order)||0), 0) + (editingSharedStopId ? 0 : 1));
+          updateSharedStopTimeHint();
           fill("sharedFareRoute", sharedRoutes, "route_id", (x) => x.route_name, "Select route...");
           if ($a("sharedFareRoute") && route && !$a("sharedFareRoute").value) $a("sharedFareRoute").value = route.route_id;
           const listEl = $a("sharedStopsList");
@@ -9994,9 +10052,9 @@
             card.appendChild(copy);
             const actions = document.createElement("div"); actions.className = "shared-route-actions";
             const edit = document.createElement("button"); edit.type="button"; edit.textContent="Edit";
-            edit.onclick = () => { editingSharedStopId=stop.id; $a("sharedStopName").value=stop.stop_name; $a("sharedStopOrder").value=stop.stop_order; $a("sharedStopDistance").value=stop.distance_km||0; $a("sharedStopDuration").value=duration; $a("sharedStopSubmit").textContent="Save Stop"; $a("sharedStopCancelEdit").hidden=false; };
+            edit.onclick = () => { editingSharedStopId=stop.id; sharedStopDurationEdited=true; $a("sharedStopName").value=stop.stop_name; $a("sharedStopOrder").value=stop.stop_order; $a("sharedStopDistance").value=stop.distance_km||0; $a("sharedStopDuration").value=duration; $a("sharedStopSubmit").textContent="Save Stop"; $a("sharedStopCancelEdit").hidden=false; updateSharedStopTimeHint(); };
             const del = document.createElement("button"); del.type="button"; del.className="danger"; del.textContent="Delete";
-            del.onclick = async () => { if(!confirm("Delete this route stop for every operator?")) return; try { await req("rpc/app_shared_route_delete_stop",{method:"POST",body:JSON.stringify({p_stop_id:stop.id})}); msg("Route stop deleted."); await loadSharedCatalog(); } catch(e){msg(e.message,true);} };
+            del.onclick = async () => { if(!confirm("Delete this route stop for every operator?")) return; try { await req("rpc/app_shared_route_delete_stop",{method:"POST",body:JSON.stringify({p_stop_id:stop.id})}); await finishSharedMutation("Route stop deleted."); } catch(e){msg(e.message,true);} };
             actions.append(edit,del); card.appendChild(actions); listEl.appendChild(card);
           });
         };
@@ -10020,7 +10078,7 @@
               line.appendChild(copy);
               const actions=document.createElement("div");actions.className="shared-route-actions";
               const edit=document.createElement("button");edit.type="button";edit.textContent="Edit";edit.onclick=()=>{$a("sharedFareBoarding").value=fare.boarding_stop_id;$a("sharedFareDropping").value=fare.dropping_stop_id;$a("sharedFareAmount").value=fare.fare;$a("sharedFareForm").scrollIntoView({behavior:"smooth",block:"center"});};
-              const del=document.createElement("button");del.type="button";del.className="danger";del.textContent="Delete";del.onclick=async()=>{if(!confirm("Delete this route fare for all operators?"))return;try{await req("rpc/app_shared_route_delete_fare",{method:"POST",body:JSON.stringify({p_fare_id:fare.id})});msg("Route fare deleted.");await loadSharedFares();}catch(e){msg(e.message,true);}};
+              const del=document.createElement("button");del.type="button";del.className="danger";del.textContent="Delete";del.onclick=async()=>{if(!confirm("Delete this route fare for all operators?"))return;try{await req("rpc/app_shared_route_delete_fare",{method:"POST",body:JSON.stringify({p_fare_id:fare.id})});await finishSharedMutation("Route fare deleted.");}catch(e){msg(e.message,true);}};
               actions.append(edit,del);line.appendChild(actions);out.appendChild(line);
             });
           } catch(e){out.textContent="Could not load route fares: "+e.message;}
@@ -10032,20 +10090,81 @@
           fill("sharedStopRoute",sharedRoutes,"route_id",(x)=>x.route_name,"Select route...");
           fill("sharedFareRoute",sharedRoutes,"route_id",(x)=>x.route_name,"Select route...");
           const cards=$a("sharedRoutesList"); if(cards){cards.replaceChildren(); if(!sharedRoutes.length)cards.textContent="No routes yet. Add the first route above.";
-            sharedRoutes.forEach((route)=>{const card=document.createElement("div");card.className="shared-route-row";const copy=document.createElement("div");copy.innerHTML="<strong></strong><span></span>";copy.querySelector("strong").textContent=route.route_name+(route.return_route_name?"  ↔  "+route.return_route_name:"");copy.querySelector("span").textContent=(route.stop_count||0)+" stops · "+Number(route.distance_km||0).toFixed(1)+" km · "+Math.floor(Number(route.segment_minutes||0)/60)+" hr "+(Number(route.segment_minutes||0)%60)+" min";card.appendChild(copy);const actions=document.createElement("div");actions.className="shared-route-actions";const edit=document.createElement("button");edit.type="button";edit.textContent="Edit route";edit.onclick=()=>{editingSharedRouteId=route.route_id;$a("sharedRouteName").value=route.route_name;$a("sharedRouteForm").querySelector("button[type=submit]").textContent="Save Route";$a("sharedRouteCancelEdit").hidden=false;$a("sharedRouteForm").scrollIntoView({behavior:"smooth",block:"center"});};const manage=document.createElement("button");manage.type="button";manage.textContent="Manage stops";manage.onclick=()=>{document.querySelector('.admin-nav-btn[data-admin-target="stops"]')?.click();$a("sharedStopRoute").value=route.route_id;renderSharedStops();$a("sharedRouteStopsCard").scrollIntoView({behavior:"smooth",block:"start"});};const fares=document.createElement("button");fares.type="button";fares.textContent="Manage fares";fares.onclick=()=>{document.querySelector('.admin-nav-btn[data-admin-target="route-fares"]')?.click();$a("sharedFareRoute").value=route.route_id;loadSharedFares();$a("sharedRouteFaresCard").scrollIntoView({behavior:"smooth",block:"start"});};actions.append(edit,manage,fares);if(!route.return_route_id){const ret=document.createElement("button");ret.type="button";ret.textContent="Add return";ret.onclick=async()=>{try{await req("rpc/app_shared_route_create_return",{method:"POST",body:JSON.stringify({p_route_id:route.route_id})});msg("Return route added with reversed stops, distance, time and fares.");await loadSharedCatalog();}catch(e){msg(e.message,true);}};actions.appendChild(ret);}const del=document.createElement("button");del.type="button";del.className="danger";del.textContent="Delete route";del.onclick=async()=>{if(!confirm("Delete this route for all operators?"))return;try{await req("rpc/app_shared_route_delete",{method:"POST",body:JSON.stringify({p_route_id:route.route_id})});msg("Route deleted.");await loadSharedCatalog();}catch(e){msg(e.message,true);}};actions.appendChild(del);card.appendChild(actions);cards.appendChild(card);});}
+            sharedRoutes.forEach((route)=>{const card=document.createElement("div");card.className="shared-route-row";const copy=document.createElement("div");copy.innerHTML="<strong></strong><span></span>";copy.querySelector("strong").textContent=route.route_name+(route.return_route_name?"  ↔  "+route.return_route_name:"");copy.querySelector("span").textContent=(route.stop_count||0)+" stops · "+Number(route.distance_km||0).toFixed(1)+" km · "+Math.floor(Number(route.segment_minutes||0)/60)+" hr "+(Number(route.segment_minutes||0)%60)+" min";card.appendChild(copy);const actions=document.createElement("div");actions.className="shared-route-actions";const edit=document.createElement("button");edit.type="button";edit.textContent="Edit route";edit.onclick=()=>{editingSharedRouteId=route.route_id;$a("sharedRouteName").value=route.route_name;$a("sharedRouteForm").querySelector("button[type=submit]").textContent="Save Route";$a("sharedRouteCancelEdit").hidden=false;$a("sharedRouteForm").scrollIntoView({behavior:"smooth",block:"center"});};const manage=document.createElement("button");manage.type="button";manage.textContent="Manage stops";manage.onclick=()=>{document.querySelector('.admin-nav-btn[data-admin-target="stops"]')?.click();$a("sharedStopRoute").value=route.route_id;renderSharedStops();$a("sharedRouteStopsCard").scrollIntoView({behavior:"smooth",block:"start"});};const fares=document.createElement("button");fares.type="button";fares.textContent="Manage fares";fares.onclick=()=>{document.querySelector('.admin-nav-btn[data-admin-target="route-fares"]')?.click();$a("sharedFareRoute").value=route.route_id;loadSharedFares();$a("sharedRouteFaresCard").scrollIntoView({behavior:"smooth",block:"start"});};actions.append(edit,manage,fares);if(!route.return_route_id){const ret=document.createElement("button");ret.type="button";ret.textContent="Add return";ret.onclick=async()=>{try{await req("rpc/app_shared_route_create_return",{method:"POST",body:JSON.stringify({p_route_id:route.route_id})});await finishSharedMutation("Return route added with reversed stops, distance, time and fares.");}catch(e){msg(e.message,true);}};actions.appendChild(ret);}const del=document.createElement("button");del.type="button";del.className="danger";del.textContent="Delete route";del.onclick=async()=>{if(!confirm("Delete this route for all operators?"))return;try{await req("rpc/app_shared_route_delete",{method:"POST",body:JSON.stringify({p_route_id:route.route_id})});await finishSharedMutation("Route deleted.");}catch(e){msg(e.message,true);}};actions.appendChild(del);card.appendChild(actions);cards.appendChild(card);});}
           const stopSelect=$a("sharedStopRoute"),fareSelect=$a("sharedFareRoute");
           if(stopSelect&&!stopSelect.value&&sharedRoutes.length)stopSelect.value=sharedRoutes[0].route_id;
           if(fareSelect&&!fareSelect.value&&sharedRoutes.length)fareSelect.value=sharedRoutes[0].route_id;
           renderSharedStops(); await loadSharedFares();
         }
-        if($a("sharedRouteForm"))$a("sharedRouteForm").addEventListener("submit",async(e)=>{e.preventDefault();try{await req("rpc/app_shared_route_save",{method:"POST",body:JSON.stringify({p_route_id:editingSharedRouteId||null,p_route_name:$a("sharedRouteName").value.trim()})});$a("sharedRouteName").value="";editingSharedRouteId="";$a("sharedRouteForm").querySelector("button[type=submit]").textContent="Add Route";$a("sharedRouteCancelEdit").hidden=true;msg("Route saved.");await loadSharedCatalog();}catch(err){msg("Could not save route: "+err.message,true);}});
+        const finishSharedMutation = async (successMessage) => {
+          msg(successMessage);
+          try {
+            await loadSharedCatalog();
+          } catch (error) {
+            msg(successMessage + " The change was saved, but the list could not refresh. Reopen this section to verify it.", true);
+          }
+        };
+        if($a("sharedStopOrder"))$a("sharedStopOrder").addEventListener("input",updateSharedStopTimeHint);
+        if($a("sharedStopDuration"))$a("sharedStopDuration").addEventListener("input",()=>{sharedStopDurationEdited=true;updateSharedStopTimeHint();});
+        if($a("sharedRouteForm"))$a("sharedRouteForm").addEventListener("submit",async(e)=>{
+          e.preventDefault();
+          const submit=$a("sharedRouteForm").querySelector('button[type="submit"]');
+          if(submit.disabled)return;
+          submit.disabled=true;
+          try{
+            await req("rpc/app_shared_route_save",{method:"POST",body:JSON.stringify({p_route_id:editingSharedRouteId||null,p_route_name:$a("sharedRouteName").value.trim()})});
+            $a("sharedRouteName").value="";editingSharedRouteId="";submit.textContent="Add Route";$a("sharedRouteCancelEdit").hidden=true;
+            await finishSharedMutation("Route saved.");
+          }catch(err){msg("Could not save route: "+err.message,true);}
+          finally{submit.disabled=false;}
+        });
         if($a("sharedRouteCancelEdit"))$a("sharedRouteCancelEdit").addEventListener("click",()=>{editingSharedRouteId="";$a("sharedRouteName").value="";$a("sharedRouteForm").querySelector("button[type=submit]").textContent="Add Route";$a("sharedRouteCancelEdit").hidden=true;});
         if($a("sharedStopRoute"))$a("sharedStopRoute").addEventListener("change",()=>{editingSharedStopId="";clearSharedStopFields();$a("sharedStopSubmit").textContent="Add Stop";$a("sharedStopCancelEdit").hidden=true;renderSharedStops();});
         if($a("sharedFareRoute"))$a("sharedFareRoute").addEventListener("change",loadSharedFares);
         if($a("sharedFareType"))$a("sharedFareType").addEventListener("change",loadSharedFares);
         if($a("sharedStopCancelEdit"))$a("sharedStopCancelEdit").addEventListener("click",()=>{editingSharedStopId="";clearSharedStopFields();$a("sharedStopSubmit").textContent="Add Stop";$a("sharedStopCancelEdit").hidden=true;});
-        if($a("sharedStopForm"))$a("sharedStopForm").addEventListener("submit",async(e)=>{e.preventDefault();const duration=$a("sharedStopDuration").value.split(":");const minutes=Number(duration[0])*60+Number(duration[1]);try{await req("rpc/app_shared_route_save_stop",{method:"POST",body:JSON.stringify({p_route_id:$a("sharedStopRoute").value,p_stop_id:editingSharedStopId||null,p_stop_name:$a("sharedStopName").value.trim(),p_stop_order:Number($a("sharedStopOrder").value),p_distance_km:Number($a("sharedStopDistance").value),p_segment_minutes:minutes,p_arrival_time:null,p_departure_time:null})});editingSharedStopId="";clearSharedStopFields();$a("sharedStopSubmit").textContent="Add Stop";$a("sharedStopCancelEdit").hidden=true;msg("Route stop saved.");await loadSharedCatalog();}catch(err){msg("Could not save stop: "+err.message,true);}});
-        if($a("sharedFareForm"))$a("sharedFareForm").addEventListener("submit",async(e)=>{e.preventDefault();try{await req("rpc/app_shared_route_save_fare",{method:"POST",body:JSON.stringify({p_route_id:$a("sharedFareRoute").value,p_bus_type:$a("sharedFareType").value,p_boarding_stop_id:$a("sharedFareBoarding").value,p_dropping_stop_id:$a("sharedFareDropping").value,p_fare:Number($a("sharedFareAmount").value)})});$a("sharedFareAmount").value="";msg("Route fare saved for every operator.");await loadSharedCatalog();}catch(err){msg("Could not save fare: "+err.message,true);}});
+        if($a("sharedStopForm"))$a("sharedStopForm").addEventListener("submit",async(e)=>{
+          e.preventDefault();
+          const submit=$a("sharedStopSubmit");
+          if(submit.disabled)return;
+          submit.disabled=true;
+          const route=selectedSharedRoute("sharedStopRoute");
+          const order=Number($a("sharedStopOrder").value);
+          const followingStop=!editingSharedStopId&&order>1?sharedStopAtOrder(route,order):null;
+          const durationParts=$a("sharedStopDuration").value.split(":").map(Number);
+          const totalMinutes=durationParts[0]*60+durationParts[1];
+          const insertedMinutes=followingStop?Math.floor(totalMinutes/2):totalMinutes;
+          const followingMinutes=followingStop?totalMinutes-insertedMinutes:0;
+          const payload={p_route_id:$a("sharedStopRoute").value,p_stop_id:editingSharedStopId||null,p_stop_name:$a("sharedStopName").value.trim(),p_stop_order:order,p_distance_km:Number($a("sharedStopDistance").value),p_segment_minutes:insertedMinutes,p_arrival_time:null,p_departure_time:null};
+          try{
+            await req("rpc/app_shared_route_save_stop",{method:"POST",body:JSON.stringify(payload)});
+            if(followingStop){
+              try{
+                await req("rpc/app_shared_route_save_stop",{method:"POST",body:JSON.stringify({p_route_id:route.route_id,p_stop_id:followingStop.id,p_stop_name:followingStop.stop_name,p_stop_order:Number(followingStop.stop_order)+1,p_distance_km:Number(followingStop.distance_km)||0,p_segment_minutes:followingMinutes,p_arrival_time:null,p_departure_time:null})});
+              }catch(err){
+                editingSharedStopId="";clearSharedStopFields();submit.textContent="Add Stop";$a("sharedStopCancelEdit").hidden=true;
+                msg("The stop was added, but the next segment time could not be updated. Review this route in the Admin Portal.",true);
+                try{await loadSharedCatalog();}catch(_){msg("The stop was added, but the list could not refresh. Reload this section to verify it.",true);}
+                return;
+              }
+            }
+            editingSharedStopId="";clearSharedStopFields();submit.textContent="Add Stop";$a("sharedStopCancelEdit").hidden=true;
+            await finishSharedMutation(followingStop?"Route stop saved. Travel time split evenly across both segments.":"Route stop saved.");
+          }catch(err){msg("Could not save route stop: "+err.message,true);}
+          finally{submit.disabled=false;}
+        });
+        if($a("sharedFareForm"))$a("sharedFareForm").addEventListener("submit",async(e)=>{
+          e.preventDefault();
+          const submit=$a("sharedFareForm").querySelector('button[type="submit"]');
+          if(submit.disabled)return;
+          submit.disabled=true;
+          try{
+            await req("rpc/app_shared_route_save_fare",{method:"POST",body:JSON.stringify({p_route_id:$a("sharedFareRoute").value,p_bus_type:$a("sharedFareType").value,p_boarding_stop_id:$a("sharedFareBoarding").value,p_dropping_stop_id:$a("sharedFareDropping").value,p_fare:Number($a("sharedFareAmount").value)})});
+            $a("sharedFareAmount").value="";
+            await finishSharedMutation("Route fare saved for every operator.");
+          }catch(err){msg("Could not save fare: "+err.message,true);}
+          finally{submit.disabled=false;}
+        });
         const list = (id, rows, render) => {
           const el = $a(id);
           if (!el) return;
