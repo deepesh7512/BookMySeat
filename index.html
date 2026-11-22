@@ -5605,9 +5605,9 @@
                   <label for="sharedStopRoute">Route</label><select id="sharedStopRoute" required></select>
                   <label for="sharedStopName">Stop Name</label><input id="sharedStopName" required />
                   <label for="sharedStopOrder">Stop Order</label><input id="sharedStopOrder" type="number" min="1" required />
-                  <label for="sharedStopDistance">Distance from previous stop (km)</label><input id="sharedStopDistance" type="number" min="0" step="0.01" value="0" required />
+                  <label for="sharedStopDistance" id="sharedStopDistanceLabel">Distance from previous stop (km)</label><input id="sharedStopDistance" type="number" min="0" step="0.01" value="0" required />
                   <label for="sharedStopDuration" id="sharedStopDurationLabel">Travel time from previous stop (HH:mm)</label><input id="sharedStopDuration" type="text" inputmode="numeric" placeholder="01:30" pattern="[0-9]{1,3}:[0-5][0-9]" value="00:00" required />
-                  <small id="sharedStopSplitHint" aria-live="polite">Choose a route order. In-between insertions split travel time evenly.</small>
+                  <small id="sharedStopSplitHint" aria-live="polite">Choose a route order. In-between insertions split distance and travel time evenly.</small>
                   <button id="sharedStopSubmit" type="submit">Add Stop</button>
                   <button id="sharedStopCancelEdit" type="button" hidden>Cancel Edit</button>
                 </form>
@@ -10019,6 +10019,7 @@
         let editingSharedStopId = "";
         let editingSharedRouteId = "";
         let sharedStopDurationEdited = false;
+        let sharedStopDistanceEdited = false;
         const sharedFareTypes = ["Non AC Seater", "Non AC Sleeper", "AC Seater", "AC Sleeper"];
         const selectedSharedRoute = (id) => sharedRoutes.find((route) => route.route_id === $a(id)?.value);
         const sharedStopAtOrder = (route, order) => (route?.stops || []).find((stop) => Number(stop.stop_order) === Number(order)) || null;
@@ -10032,8 +10033,12 @@
           const followingStop = sharedStopAtOrder(route, order);
           const isInsertion = !editingSharedStopId && order > 1 && followingStop;
           const label = $a("sharedStopDurationLabel");
+          const distanceLabel = $a("sharedStopDistanceLabel");
           const hint = $a("sharedStopSplitHint");
+          if (distanceLabel) distanceLabel.textContent = isInsertion ? "Total distance for this segment (km)" : "Distance from previous stop (km)";
           if (label) label.textContent = isInsertion ? "Total travel time for this segment (HH:mm)" : "Travel time from previous stop (HH:mm)";
+          if (isInsertion && !sharedStopDistanceEdited && $a("sharedStopDistance")) $a("sharedStopDistance").value = Number(followingStop.distance_km || 0).toFixed(2);
+          else if (!isInsertion && !editingSharedStopId && !sharedStopDistanceEdited && $a("sharedStopDistance")) $a("sharedStopDistance").value = "0";
           if (isInsertion && !sharedStopDurationEdited && $a("sharedStopDuration")) {
             $a("sharedStopDuration").value = minutesToDuration(followingStop.segment_minutes);
           } else if (!isInsertion && !editingSharedStopId && !sharedStopDurationEdited && $a("sharedStopDuration")) {
@@ -10041,12 +10046,14 @@
           }
           if (!hint) return;
           if (isInsertion) {
+            const totalDistanceHundredths = Math.max(0, Math.round((Number($a("sharedStopDistance")?.value) || 0) * 100));
+            const firstDistanceHundredths = Math.floor(totalDistanceHundredths / 2);
             const parts = ($a("sharedStopDuration")?.value || "00:00").split(":").map(Number);
             const total = parts.length === 2 && parts.every(Number.isFinite) ? parts[0] * 60 + parts[1] : 0;
             const first = Math.floor(total / 2);
-            hint.textContent = "Automatic split: " + minutesToDuration(first) + " + " + minutesToDuration(total - first) + ". Review segment distance after insertion.";
+            hint.textContent = "Automatic split: " + ((firstDistanceHundredths / 100).toFixed(2)) + " + " + (((totalDistanceHundredths - firstDistanceHundredths) / 100).toFixed(2)) + " km · " + minutesToDuration(first) + " + " + minutesToDuration(total - first) + ".";
           } else {
-            hint.textContent = "For an in-between stop, the entered total time is split evenly. Review segment distance after insertion.";
+            hint.textContent = "For an in-between stop, the entered segment distance and travel time are split evenly.";
           }
         };
         const clearSharedStopFields = () => {
@@ -10054,6 +10061,7 @@
           if($a("sharedStopDistance"))$a("sharedStopDistance").value="0";
           if($a("sharedStopDuration"))$a("sharedStopDuration").value="00:00";
           sharedStopDurationEdited = false;
+          sharedStopDistanceEdited = false;
           const route=selectedSharedRoute("sharedStopRoute"),stops=route?.stops||[];
           if($a("sharedStopOrder"))$a("sharedStopOrder").value=stops.reduce((max,stop)=>Math.max(max,Number(stop.stop_order)||0),0)+1;
           updateSharedStopTimeHint();
@@ -10081,7 +10089,7 @@
             card.appendChild(copy);
             const actions = document.createElement("div"); actions.className = "shared-route-actions";
             const edit = document.createElement("button"); edit.type="button"; edit.textContent="Edit";
-            edit.onclick = () => { editingSharedStopId=stop.id; sharedStopDurationEdited=true; $a("sharedStopName").value=stop.stop_name; $a("sharedStopOrder").value=stop.stop_order; $a("sharedStopDistance").value=stop.distance_km||0; $a("sharedStopDuration").value=duration; $a("sharedStopSubmit").textContent="Save Stop"; $a("sharedStopCancelEdit").hidden=false; updateSharedStopTimeHint(); };
+            edit.onclick = () => { editingSharedStopId=stop.id; sharedStopDurationEdited=true; sharedStopDistanceEdited=true; $a("sharedStopName").value=stop.stop_name; $a("sharedStopOrder").value=stop.stop_order; $a("sharedStopDistance").value=stop.distance_km||0; $a("sharedStopDuration").value=duration; $a("sharedStopSubmit").textContent="Save Stop"; $a("sharedStopCancelEdit").hidden=false; updateSharedStopTimeHint(); };
             const del = document.createElement("button"); del.type="button"; del.className="danger"; del.textContent="Delete";
             del.onclick = async () => { if(!confirm("Delete this route stop for every operator?")) return; try { await req("rpc/app_admin_shared_route_delete_stop",{method:"POST",body:JSON.stringify({p_stop_id:stop.id})}); await finishSharedMutation("Route stop deleted."); } catch(e){msg(e.message,true);} };
             actions.append(edit,del); card.appendChild(actions); listEl.appendChild(card);
@@ -10146,7 +10154,7 @@
           if (item.request_type === "stop") {
             const next = p.following_stop;
             const lines = ["New stop: " + (p.stop_name || "(unnamed)"), "Order " + p.stop_order + " · " + Number(p.distance_km || 0).toFixed(2) + " km · " + operatorRouteRequestDuration(p.segment_minutes)];
-            if (next) lines.push("Split segment: " + operatorRouteRequestDuration(p.segment_minutes) + " + " + operatorRouteRequestDuration(next.segment_minutes));
+            if (next) lines.push("Split segment: " + Number(p.distance_km || 0).toFixed(2) + " + " + Number(next.distance_km || 0).toFixed(2) + " km · " + operatorRouteRequestDuration(p.segment_minutes) + " + " + operatorRouteRequestDuration(next.segment_minutes));
             return lines;
           }
           if (item.action === "delete") return ["Remove fare rule " + (p.fare_id || "") + (p.bus_type ? " · " + p.bus_type : "")];
@@ -10219,6 +10227,7 @@
           try { await loadSharedCatalog(); } catch (_) {}
         };
         if($a("sharedStopOrder"))$a("sharedStopOrder").addEventListener("input",updateSharedStopTimeHint);
+        if($a("sharedStopDistance"))$a("sharedStopDistance").addEventListener("input",()=>{sharedStopDistanceEdited=true;updateSharedStopTimeHint();});
         if($a("sharedStopDuration"))$a("sharedStopDuration").addEventListener("input",()=>{sharedStopDurationEdited=true;updateSharedStopTimeHint();});
         if($a("sharedRouteForm"))$a("sharedRouteForm").addEventListener("submit",async(e)=>{
           e.preventDefault();
@@ -10249,13 +10258,16 @@
           const totalMinutes=durationParts[0]*60+durationParts[1];
           const insertedMinutes=followingStop?Math.floor(totalMinutes/2):totalMinutes;
           const followingMinutes=followingStop?totalMinutes-insertedMinutes:0;
-          const payload={p_route_id:$a("sharedStopRoute").value,p_stop_id:editingSharedStopId||null,p_stop_name:$a("sharedStopName").value.trim(),p_stop_order:order,p_distance_km:Number($a("sharedStopDistance").value),p_segment_minutes:insertedMinutes,p_arrival_time:null,p_departure_time:null};
+          const totalDistanceHundredths=Math.max(0,Math.round((Number($a("sharedStopDistance").value)||0)*100));
+          const insertedDistance=followingStop?Math.floor(totalDistanceHundredths/2)/100:totalDistanceHundredths/100;
+          const followingDistance=followingStop?(totalDistanceHundredths-Math.floor(totalDistanceHundredths/2))/100:0;
+          const payload={p_route_id:$a("sharedStopRoute").value,p_stop_id:editingSharedStopId||null,p_stop_name:$a("sharedStopName").value.trim(),p_stop_order:order,p_distance_km:insertedDistance,p_segment_minutes:insertedMinutes,p_arrival_time:null,p_departure_time:null};
           try{
             if(followingStop){
-              await req("rpc/app_admin_insert_shared_route_stop",{method:"POST",body:JSON.stringify({p_route_id:route.route_id,p_stop_name:payload.p_stop_name,p_stop_order:order,p_distance_km:payload.p_distance_km,p_segment_minutes:insertedMinutes,p_split_segment:true,p_following_distance_km:Number(followingStop.distance_km)||0,p_following_segment_minutes:followingMinutes})});
+              await req("rpc/app_admin_insert_shared_route_stop",{method:"POST",body:JSON.stringify({p_route_id:route.route_id,p_stop_name:payload.p_stop_name,p_stop_order:order,p_distance_km:payload.p_distance_km,p_segment_minutes:insertedMinutes,p_split_segment:true,p_following_distance_km:followingDistance,p_following_segment_minutes:followingMinutes})});
             } else await req("rpc/app_admin_shared_route_save_stop",{method:"POST",body:JSON.stringify(payload)});
             editingSharedStopId="";clearSharedStopFields();submit.textContent="Add Stop";$a("sharedStopCancelEdit").hidden=true;
-            await finishSharedMutation(followingStop?"Route stop saved. Travel time split evenly across both segments.":"Route stop saved.");
+            await finishSharedMutation(followingStop?"Route stop saved. Distance and travel time split evenly across both segments.":"Route stop saved.");
           }catch(err){msg("Could not save route stop: "+err.message,true);}
           finally{submit.disabled=false;}
         });
