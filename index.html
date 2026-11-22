@@ -10186,11 +10186,7 @@
         const applyOperatorRouteChange = async (item) => {
           const p = item.payload || {};
           if (item.request_type === "stop") {
-            await req("rpc/app_admin_shared_route_save_stop", {method:"POST",body:JSON.stringify({p_route_id:item.route_id,p_stop_id:null,p_stop_name:p.stop_name,p_stop_order:p.stop_order,p_distance_km:p.distance_km,p_segment_minutes:p.segment_minutes,p_arrival_time:null,p_departure_time:null})});
-            if (p.following_stop) {
-              const next=p.following_stop;
-              await req("rpc/app_admin_shared_route_save_stop", {method:"POST",body:JSON.stringify({p_route_id:item.route_id,p_stop_id:next.id,p_stop_name:next.stop_name,p_stop_order:next.stop_order,p_distance_km:next.distance_km,p_segment_minutes:next.segment_minutes,p_arrival_time:null,p_departure_time:null})});
-            }
+            await req("rpc/app_admin_insert_shared_route_stop", {method:"POST",body:JSON.stringify({p_route_id:item.route_id,p_stop_name:p.stop_name,p_stop_order:Number(p.stop_order),p_distance_km:Number(p.distance_km)||0,p_segment_minutes:Number(p.segment_minutes)||0,p_split_segment:!!p.following_stop,p_following_distance_km:Number(p.following_stop?.distance_km)||0,p_following_segment_minutes:Number(p.following_stop?.segment_minutes)||0})});
             return;
           }
           if (item.action === "delete") {
@@ -10255,17 +10251,9 @@
           const followingMinutes=followingStop?totalMinutes-insertedMinutes:0;
           const payload={p_route_id:$a("sharedStopRoute").value,p_stop_id:editingSharedStopId||null,p_stop_name:$a("sharedStopName").value.trim(),p_stop_order:order,p_distance_km:Number($a("sharedStopDistance").value),p_segment_minutes:insertedMinutes,p_arrival_time:null,p_departure_time:null};
           try{
-            await req("rpc/app_admin_shared_route_save_stop",{method:"POST",body:JSON.stringify(payload)});
             if(followingStop){
-              try{
-                await req("rpc/app_admin_shared_route_save_stop",{method:"POST",body:JSON.stringify({p_route_id:route.route_id,p_stop_id:followingStop.id,p_stop_name:followingStop.stop_name,p_stop_order:Number(followingStop.stop_order)+1,p_distance_km:Number(followingStop.distance_km)||0,p_segment_minutes:followingMinutes,p_arrival_time:null,p_departure_time:null})});
-              }catch(err){
-                editingSharedStopId="";clearSharedStopFields();submit.textContent="Add Stop";$a("sharedStopCancelEdit").hidden=true;
-                msg("The stop was added, but the next segment time could not be updated. Review this route in the Admin Portal.",true);
-                try{await loadSharedCatalog();}catch(_){msg("The stop was added, but the list could not refresh. Reload this section to verify it.",true);}
-                return;
-              }
-            }
+              await req("rpc/app_admin_insert_shared_route_stop",{method:"POST",body:JSON.stringify({p_route_id:route.route_id,p_stop_name:payload.p_stop_name,p_stop_order:order,p_distance_km:payload.p_distance_km,p_segment_minutes:insertedMinutes,p_split_segment:true,p_following_distance_km:Number(followingStop.distance_km)||0,p_following_segment_minutes:followingMinutes})});
+            } else await req("rpc/app_admin_shared_route_save_stop",{method:"POST",body:JSON.stringify(payload)});
             editingSharedStopId="";clearSharedStopFields();submit.textContent="Add Stop";$a("sharedStopCancelEdit").hidden=true;
             await finishSharedMutation(followingStop?"Route stop saved. Travel time split evenly across both segments.":"Route stop saved.");
           }catch(err){msg("Could not save route stop: "+err.message,true);}
