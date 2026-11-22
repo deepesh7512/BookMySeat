@@ -1698,6 +1698,17 @@
         font: inherit; font-weight: 700; cursor: pointer;
       }
       .shared-route-actions button.danger { background: #be2833; }
+      .shared-fare-matrix { margin-top:16px; padding:16px; border:1px solid #dce4ee; border-radius:14px; background:#fff; }
+      .shared-fare-matrix h5 { margin:0 0 6px; color:#1e2a3d; font-size:16px; }
+      .shared-fare-matrix p { margin:6px 0 12px; color:#667085; font-size:13px; line-height:1.5; }
+      .shared-fare-matrix-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 14px; }
+      .shared-fare-matrix-grid label { display:grid; gap:5px; color:#344054; font-size:13px; font-weight:700; }
+      .shared-fare-matrix-grid input { width:100%; min-width:0; padding:10px; border:1px solid #d8dee8; border-radius:9px; font:inherit; }
+      .shared-fare-layout-preview { margin-top:14px; padding:12px; border-radius:10px; background:#f7f8fa; }
+      .shared-fare-layout-preview strong { color:#1e2a3d; }
+      .shared-fare-layout-preview p { margin:8px 0 0; color:#1e2a3d; font-weight:600; line-height:1.7; white-space:pre-line; }
+      .shared-fare-matrix #saveSharedFareMatrix { margin-top:12px; border:0; border-radius:10px; padding:10px 14px; color:#fff; background:#23446f; font:inherit; font-weight:700; cursor:pointer; }
+      @media (max-width:640px) { .shared-fare-matrix-grid { grid-template-columns:1fr; } }
       #sharedRouteStopsCard, #sharedRouteFaresCard { margin-top: 20px; padding: 18px; border: 1px solid #e5eaf1; border-radius: 16px; background: #f9fbfe; }
       #sharedRouteStopsCard h4, #sharedRouteFaresCard h4 { margin: 0 0 12px; color: #1e2a3d; }
       @media (max-width: 640px) { .shared-route-row { align-items: stretch; flex-direction: column; } .shared-route-actions { justify-content: flex-start; } }
@@ -5630,7 +5641,7 @@
 
             <div class="admin-section-view" data-admin-view="route-fares">
               <h3>Route Fares</h3>
-              <p>Manage boarding-to-destination fares for each bus category.</p>
+              <p>Manage boarding-to-destination fares for every bus category and review the seat fares produced by each sleeper layout.</p>
               <div class="admin-card" id="sharedRouteFaresCard">
                 <h4>Bus Fares</h4>
                 <form id="sharedFareForm">
@@ -5641,9 +5652,25 @@
                   </select>
                   <label for="sharedFareBoarding">Boarding stop</label><select id="sharedFareBoarding" required></select>
                   <label for="sharedFareDropping">Destination stop</label><select id="sharedFareDropping" required></select>
-                  <label for="sharedFareAmount">Fare (₹)</label><input id="sharedFareAmount" type="number" min="10" step="10" required />
-                  <small class="muted">Suggested from distance and bus type, rounded up to the next ₹10. For mixed seater+sleeper buses this is the seater fare; sleeper-seat pricing is calculated separately. You can edit this amount.</small>
-                  <button type="submit">Save Fare</button>
+                  <label for="sharedFareAmount">Fare (₹) for selected category</label><input id="sharedFareAmount" type="number" min="10" step="10" required />
+                  <small class="muted">Suggested from distance using ₹2/km, minimum ₹10, category rates, and rounding up to ₹10. You can edit this fare.</small>
+                  <button type="submit">Save selected fare</button>
+                  <section class="shared-fare-matrix" aria-labelledby="sharedFareMatrixTitle">
+                    <h5 id="sharedFareMatrixTitle">Update all bus categories</h5>
+                    <p>Edit all four bus-category fares below. Single-deck and double-deck sleeper prices recalculate from these fares using the saved seat layout.</p>
+                    <div class="shared-fare-matrix-grid">
+                      <label>Non AC Seater (Ordinary)<input id="matrixFareNonAcSeater" type="number" min="10" step="10" /></label>
+                      <label>Non AC Seater + Sleeper (lower seater)<input id="matrixFareNonAcCombo" type="number" min="10" step="10" /></label>
+                      <label>AC Seater (Deluxe)<input id="matrixFareAcSeater" type="number" min="10" step="10" /></label>
+                      <label>AC Seater + Sleeper (lower seater)<input id="matrixFareAcCombo" type="number" min="10" step="10" /></label>
+                    </div>
+                    <div class="shared-fare-layout-preview">
+                      <strong>Fare by seat layout</strong>
+                      <p id="sharedFareLayoutPreviewResult" aria-live="polite">Choose a route and stop pair to preview seat fares.</p>
+                    </div>
+                    <small class="muted">Night service adds 10% at booking. Single-deck sleeper berths and double-deck upper berths use the sleeper rate; lower-deck seats use the selected bus-category fare.</small>
+                    <button id="saveSharedFareMatrix" type="button">Save all four category fares</button>
+                  </section>
                 </form>
                 <div id="sharedFaresList"></div>
               </div>
@@ -10062,6 +10089,8 @@
         };
         const exhaustedAdminTablePages = new Set();
         let sharedRoutes = [];
+        const isSharedReturnRoute = (route) => sharedRoutes.some((candidate) => String(candidate.return_route_id || "") === String(route.route_id) && String(candidate.route_id) !== String(route.route_id));
+        const sharedRouteRoots = () => { const roots = sharedRoutes.filter((route) => !isSharedReturnRoute(route)); return roots.length ? roots : sharedRoutes.filter((route) => !route.return_route_id || String(route.route_id).localeCompare(String(route.return_route_id)) < 0); };
         let editingSharedStopId = "";
         let editingSharedRouteId = "";
         let sharedStopDurationEdited = false;
@@ -10078,9 +10107,46 @@
           const to = stops.findIndex((stop) => String(stop.id) === String(droppingId));
           if (from < 0 || to <= from) return null;
           const distance = stops.slice(from + 1, to + 1).reduce((sum, stop) => sum + Math.max(0, Number(stop.distance_km) || 0), 0);
-          if (!distance) return null;
           const normalFare = Math.max(10, Math.ceil((distance * 2) / 10) * 10);
           return Math.max(10, Math.ceil((normalFare * sharedFareMultiplier(type)) / 10) * 10);
+        };
+        const sharedFareMatrixFields = [
+          ["Non AC Seater", "matrixFareNonAcSeater", "non_ac_seater"],
+          ["Non AC Seater + Sleeper", "matrixFareNonAcCombo", "non_ac_seater_sleeper"],
+          ["AC Seater", "matrixFareAcSeater", "ac_seater"],
+          ["AC Seater + Sleeper", "matrixFareAcCombo", "ac_seater_sleeper"],
+        ];
+        const updateSharedFareMatrixSuggestions = () => {
+          const route = selectedSharedRoute("sharedFareRoute");
+          const from = $a("sharedFareBoarding")?.value;
+          const to = $a("sharedFareDropping")?.value;
+          for (const [type, id] of sharedFareMatrixFields) {
+            const input = $a(id);
+            if (input) input.value = calculateSharedFare(route, type, from, to) ?? "";
+          }
+          updateSharedFareLayoutPreview();
+        };
+        const updateSharedFareLayoutPreview = () => {
+          const result = $a("sharedFareLayoutPreviewResult");
+          if (!result) return;
+          const readFare = (id) => Number($a(id)?.value);
+          const nonAcSeater = readFare("matrixFareNonAcSeater");
+          const nonAcCombo = readFare("matrixFareNonAcCombo");
+          const acSeater = readFare("matrixFareAcSeater");
+          const acCombo = readFare("matrixFareAcCombo");
+          if (![nonAcSeater, nonAcCombo, acSeater, acCombo].every((fare) => Number.isFinite(fare) && fare >= 10)) {
+            result.textContent = "Choose a route and stop pair to preview seat fares.";
+            return;
+          }
+          const roundedSleeperFare = (base, seaterRate, sleeperRate) => Math.max(10, Math.ceil((base / seaterRate * sleeperRate) / 10) * 10);
+          const nonAcSleeper = roundedSleeperFare(nonAcCombo, 1.25, 1.4);
+          const acSleeper = roundedSleeperFare(acCombo, 1.5, 1.75);
+          result.textContent = [
+            "Non AC Seater: all seats ₹" + nonAcSeater,
+            "Non AC Seater + Sleeper — double deck: lower ₹" + nonAcCombo + ", upper ₹" + nonAcSleeper + "; single deck: all sleeper ₹" + nonAcSleeper,
+            "AC Seater: all seats ₹" + acSeater,
+            "AC Seater + Sleeper — double deck: lower ₹" + acCombo + ", upper ₹" + acSleeper + "; single deck: all sleeper ₹" + acSleeper,
+          ].join("\n");
         };
         const updateSharedFareSuggestion = () => {
           const amount = $a("sharedFareAmount");
@@ -10139,8 +10205,8 @@
           if (!editingSharedStopId && $a("sharedStopOrder")) $a("sharedStopOrder").value = stops.reduce((max, stop) => Math.max(max, Number(stop.stop_order)||0), 0) + 1;
           if ($a("sharedStopOrder")) $a("sharedStopOrder").max = String(stops.reduce((max, stop) => Math.max(max, Number(stop.stop_order)||0), 0) + (editingSharedStopId ? 0 : 1));
           updateSharedStopTimeHint();
-          fill("sharedFareRoute", sharedRoutes, "route_id", (x) => x.route_name, "Select route...");
-          if ($a("sharedFareRoute") && route && !$a("sharedFareRoute").value) $a("sharedFareRoute").value = route.route_id;
+          fill("sharedFareRoute", sharedRouteRoots(), "route_id", (x) => x.route_name, "Select route...");
+          if ($a("sharedFareRoute") && route && !$a("sharedFareRoute").value) $a("sharedFareRoute").value = (route.return_route_id ? route : sharedRoutes.find((candidate)=>String(candidate.return_route_id)===String(route.route_id)) || route).route_id;
           const listEl = $a("sharedStopsList");
           if (!listEl) return;
           listEl.replaceChildren();
@@ -10158,7 +10224,7 @@
             const edit = document.createElement("button"); edit.type="button"; edit.textContent="Edit";
             edit.onclick = () => { editingSharedStopId=stop.id; sharedStopDurationEdited=true; sharedStopDistanceEdited=true; $a("sharedStopName").value=stop.stop_name; $a("sharedStopOrder").value=stop.stop_order; $a("sharedStopDistance").value=stop.distance_km||0; $a("sharedStopDuration").value=duration; $a("sharedStopSubmit").textContent="Save Stop"; $a("sharedStopCancelEdit").hidden=false; updateSharedStopTimeHint(); };
             const del = document.createElement("button"); del.type="button"; del.className="danger"; del.textContent="Delete";
-            del.onclick = async () => { if(!confirm("Delete this route stop for every operator?")) return; try { await req("rpc/app_admin_shared_route_delete_stop",{method:"POST",body:JSON.stringify({p_stop_id:stop.id})}); await syncSharedRouteReturn(route.route_id); await finishSharedMutation("Route stop deleted."); } catch(e){msg(e.message,true);} };
+            del.onclick = async () => { if(!confirm("Delete this route stop for every operator?")) return; try { await req("rpc/app_admin_shared_route_delete_stop",{method:"POST",body:JSON.stringify({p_stop_id:stop.id})}); await recalculateSharedRouteFares(route.route_id); await finishSharedMutation("Route stop deleted."); } catch(e){msg(e.message,true);} };
             actions.append(edit,del); card.appendChild(actions); listEl.appendChild(card);
           });
         };
@@ -10196,13 +10262,13 @@
           sharedRoutes = Array.isArray(rows) ? rows : [];
           const suggestionList=$a("sharedRouteSuggestions");if(suggestionList){suggestionList.replaceChildren();sharedRoutes.forEach((route)=>{const option=document.createElement("option");option.value=route.route_name;suggestionList.appendChild(option);});}
           fill("sharedStopRoute",sharedRoutes,"route_id",(x)=>x.route_name,"Select route...");
-          fill("sharedFareRoute",sharedRoutes,"route_id",(x)=>x.route_name,"Select route...");
+          fill("sharedFareRoute",sharedRouteRoots(),"route_id",(x)=>x.route_name,"Select route...");
           const cards=$a("sharedRoutesList"); if(cards){cards.replaceChildren(); if(!sharedRoutes.length)cards.textContent="No routes yet. Add the first route above.";
-            sharedRoutes.filter((route)=>!route.return_route_id||String(route.route_id).localeCompare(String(route.return_route_id))<0).forEach((route)=>{const card=document.createElement("div");card.className="shared-route-row";const copy=document.createElement("div");copy.innerHTML="<strong></strong><span></span>";copy.querySelector("strong").textContent=route.route_name+(route.return_route_name?"  ↔  "+route.return_route_name:"");copy.querySelector("span").textContent=(route.stop_count||0)+" stops · "+Number(route.distance_km||0).toFixed(1)+" km · "+Math.floor(Number(route.segment_minutes||0)/60)+" hr "+(Number(route.segment_minutes||0)%60)+" min";card.appendChild(copy);const actions=document.createElement("div");actions.className="shared-route-actions";const edit=document.createElement("button");edit.type="button";edit.textContent="Edit route";edit.onclick=()=>{editingSharedRouteId=route.route_id;$a("sharedRouteName").value=route.route_name;$a("sharedRouteForm").querySelector("button[type=submit]").textContent="Save Route";$a("sharedRouteCancelEdit").hidden=false;$a("sharedRouteForm").scrollIntoView({behavior:"smooth",block:"center"});};const manage=document.createElement("button");manage.type="button";manage.textContent="Manage stops";manage.onclick=()=>{document.querySelector('.admin-nav-btn[data-admin-target="stops"]')?.click();$a("sharedStopRoute").value=route.route_id;renderSharedStops();$a("sharedRouteStopsCard").scrollIntoView({behavior:"smooth",block:"start"});};const fares=document.createElement("button");fares.type="button";fares.textContent="Manage fares";fares.onclick=()=>{document.querySelector('.admin-nav-btn[data-admin-target="route-fares"]')?.click();$a("sharedFareRoute").value=route.route_id;loadSharedFares();$a("sharedRouteFaresCard").scrollIntoView({behavior:"smooth",block:"start"});};actions.append(edit,manage,fares);if(!route.return_route_id){const ret=document.createElement("button");ret.type="button";ret.textContent="Add return";ret.onclick=async()=>{try{await req("rpc/app_admin_shared_route_create_return",{method:"POST",body:JSON.stringify({p_route_id:route.route_id})});await finishSharedMutation("Return route added and synced with reversed stops, fares, distance and travel time.");}catch(e){msg(e.message,true);}};actions.appendChild(ret);}else{const removeReturn=document.createElement("button");removeReturn.type="button";removeReturn.className="danger";removeReturn.textContent="Remove return";removeReturn.onclick=async()=>{if(!confirm("Remove this return direction? It will be hidden from new route choices. Existing trips and tickets will be preserved."))return;try{await req("rpc/app_admin_shared_route_remove_return",{method:"POST",body:JSON.stringify({p_route_id:route.route_id})});await finishSharedMutation("Return direction removed. Existing trips and tickets are preserved.");}catch(e){msg(e.message,true);}};actions.appendChild(removeReturn);}const archive=document.createElement("button");archive.type="button";archive.className="danger";archive.textContent=route.return_route_id?"Archive route pair":"Archive route";archive.onclick=async()=>{if(!confirm(route.return_route_id?"Archive this route and its return direction? They will be hidden from new route choices. Existing trips and tickets will be preserved.":"Archive this route? It will be hidden from new route choices. Existing trips and tickets will be preserved."))return;try{await archiveSharedRouteAndReturn(route);}catch(e){msg(e.message,true);}};actions.appendChild(archive);const permanent=document.createElement("button");permanent.type="button";permanent.className="danger";permanent.textContent="Permanently delete";permanent.onclick=async()=>{if(!confirm("Permanently delete this route pair and all linked operator routes, trips, bookings and tickets? This cannot be undone."))return;if(prompt('Type DELETE to permanently remove this route and all linked records.')!=="DELETE")return;permanent.disabled=true;try{await req("rpc/app_admin_permanently_delete",{method:"POST",body:JSON.stringify({p_table_name:"app_shared_routes",p_row_id:route.route_id})});await finishSharedMutation("Route pair and its linked records were permanently deleted.");await loadAll();}catch(e){msg(e.message,true);permanent.disabled=false;}};actions.appendChild(permanent);card.appendChild(actions);cards.appendChild(card);});}
+            sharedRouteRoots().forEach((route)=>{const card=document.createElement("div");card.className="shared-route-row";const copy=document.createElement("div");copy.innerHTML="<strong></strong><span></span>";copy.querySelector("strong").textContent=route.route_name+(route.return_route_name?"  ↔  "+route.return_route_name:"");copy.querySelector("span").textContent=(route.stop_count||0)+" stops · "+Number(route.distance_km||0).toFixed(1)+" km · "+Math.floor(Number(route.segment_minutes||0)/60)+" hr "+(Number(route.segment_minutes||0)%60)+" min";card.appendChild(copy);const actions=document.createElement("div");actions.className="shared-route-actions";const edit=document.createElement("button");edit.type="button";edit.textContent="Edit route";edit.onclick=()=>{editingSharedRouteId=route.route_id;$a("sharedRouteName").value=route.route_name;$a("sharedRouteForm").querySelector("button[type=submit]").textContent="Save Route";$a("sharedRouteCancelEdit").hidden=false;$a("sharedRouteForm").scrollIntoView({behavior:"smooth",block:"center"});};const manage=document.createElement("button");manage.type="button";manage.textContent="Manage stops";manage.onclick=()=>{document.querySelector('.admin-nav-btn[data-admin-target="stops"]')?.click();$a("sharedStopRoute").value=route.route_id;renderSharedStops();$a("sharedRouteStopsCard").scrollIntoView({behavior:"smooth",block:"start"});};const fares=document.createElement("button");fares.type="button";fares.textContent="Manage fares";fares.onclick=()=>{document.querySelector('.admin-nav-btn[data-admin-target="route-fares"]')?.click();$a("sharedFareRoute").value=route.route_id;loadSharedFares();$a("sharedRouteFaresCard").scrollIntoView({behavior:"smooth",block:"start"});};actions.append(edit,manage,fares);if(!route.return_route_id){const ret=document.createElement("button");ret.type="button";ret.textContent="Add return";ret.onclick=async()=>{try{await req("rpc/app_admin_shared_route_create_return",{method:"POST",body:JSON.stringify({p_route_id:route.route_id})});await recalculateSharedRouteFares(route.route_id);await finishSharedMutation("Return route added and synced with reversed stops, fares, distance and travel time.");}catch(e){msg(e.message,true);}};actions.appendChild(ret);}else{const removeReturn=document.createElement("button");removeReturn.type="button";removeReturn.className="danger";removeReturn.textContent="Remove return";removeReturn.onclick=async()=>{if(!confirm("Remove this return direction? It will be hidden from new route choices. Existing trips and tickets will be preserved."))return;try{await req("rpc/app_admin_shared_route_remove_return",{method:"POST",body:JSON.stringify({p_route_id:route.route_id})});await finishSharedMutation("Return direction removed. Existing trips and tickets are preserved.");}catch(e){msg(e.message,true);}};actions.appendChild(removeReturn);}const archive=document.createElement("button");archive.type="button";archive.className="danger";archive.textContent=route.return_route_id?"Archive route pair":"Archive route";archive.onclick=async()=>{if(!confirm(route.return_route_id?"Archive this route and its return direction? They will be hidden from new route choices. Existing trips and tickets will be preserved.":"Archive this route? It will be hidden from new route choices. Existing trips and tickets will be preserved."))return;try{await archiveSharedRouteAndReturn(route);}catch(e){msg(e.message,true);}};actions.appendChild(archive);const permanent=document.createElement("button");permanent.type="button";permanent.className="danger";permanent.textContent="Permanently delete";permanent.onclick=async()=>{if(!confirm("Permanently delete this route pair and all linked operator routes, trips, bookings and tickets? This cannot be undone."))return;if(prompt('Type DELETE to permanently remove this route and all linked records.')!=="DELETE")return;permanent.disabled=true;try{await req("rpc/app_admin_permanently_delete",{method:"POST",body:JSON.stringify({p_table_name:"app_shared_routes",p_row_id:route.route_id})});await finishSharedMutation("Route pair and its linked records were permanently deleted.");await loadAll();}catch(e){msg(e.message,true);permanent.disabled=false;}};actions.appendChild(permanent);card.appendChild(actions);cards.appendChild(card);});}
           const stopSelect=$a("sharedStopRoute"),fareSelect=$a("sharedFareRoute");
           if(stopSelect&&!stopSelect.value&&sharedRoutes.length)stopSelect.value=sharedRoutes[0].route_id;
-          if(fareSelect&&!fareSelect.value&&sharedRoutes.length)fareSelect.value=sharedRoutes[0].route_id;
-          renderSharedStops(); await loadSharedFares();
+          if(fareSelect&&!fareSelect.value&&sharedRouteRoots().length)fareSelect.value=sharedRouteRoots()[0].route_id;
+          renderSharedStops(); await loadSharedFares(); updateSharedFareMatrixSuggestions();
         }
         const finishSharedMutation = async (successMessage) => {
           msg(successMessage);
@@ -10212,9 +10278,9 @@
             msg(successMessage + " The change was saved, but the list could not refresh. Reopen this section to verify it.", true);
           }
         };
-        const syncSharedRouteReturn = async (routeId) => {
+        const recalculateSharedRouteFares = async (routeId) => {
           if (!routeId) return;
-          await req("rpc/app_admin_sync_shared_route_return", {method:"POST",body:JSON.stringify({p_route_id:routeId})});
+          await req("rpc/app_admin_recalculate_shared_route_fares", {method:"POST",body:JSON.stringify({p_route_id:routeId})});
         };
         const operatorRouteRequestDuration = (minutes) => {
           const value = Math.max(0, Number(minutes) || 0);
@@ -10266,7 +10332,7 @@
           const p = item.payload || {};
           if (item.request_type === "stop") {
             await req("rpc/app_admin_insert_shared_route_stop", {method:"POST",body:JSON.stringify({p_route_id:item.route_id,p_stop_name:p.stop_name,p_stop_order:Number(p.stop_order),p_distance_km:Number(p.distance_km)||0,p_segment_minutes:Number(p.segment_minutes)||0,p_split_segment:!!p.following_stop,p_following_distance_km:Number(p.following_stop?.distance_km)||0,p_following_segment_minutes:Number(p.following_stop?.segment_minutes)||0})});
-            await syncSharedRouteReturn(item.route_id);
+            await recalculateSharedRouteFares(item.route_id);
             return;
           }
           if (item.action === "delete") {
@@ -10319,6 +10385,8 @@
         if($a("sharedFareType"))$a("sharedFareType").addEventListener("change",()=>{loadSharedFares();updateSharedFareSuggestion();});
         if($a("sharedFareBoarding"))$a("sharedFareBoarding").addEventListener("change",updateSharedFareSuggestion);
         if($a("sharedFareDropping"))$a("sharedFareDropping").addEventListener("change",updateSharedFareSuggestion);
+        ["sharedFareRoute","sharedFareBoarding","sharedFareDropping"].forEach((id)=>$a(id)?.addEventListener("change",updateSharedFareMatrixSuggestions));
+        ["matrixFareNonAcSeater","matrixFareNonAcCombo","matrixFareAcSeater","matrixFareAcCombo"].forEach((id)=>$a(id)?.addEventListener("input",updateSharedFareLayoutPreview));
         if($a("sharedStopCancelEdit"))$a("sharedStopCancelEdit").addEventListener("click",()=>{editingSharedStopId="";clearSharedStopFields();$a("sharedStopSubmit").textContent="Add Stop";$a("sharedStopCancelEdit").hidden=true;});
         if($a("sharedStopForm"))$a("sharedStopForm").addEventListener("submit",async(e)=>{
           e.preventDefault();
@@ -10340,7 +10408,7 @@
             if(followingStop){
               await req("rpc/app_admin_insert_shared_route_stop",{method:"POST",body:JSON.stringify({p_route_id:route.route_id,p_stop_name:payload.p_stop_name,p_stop_order:order,p_distance_km:payload.p_distance_km,p_segment_minutes:insertedMinutes,p_split_segment:true,p_following_distance_km:followingDistance,p_following_segment_minutes:followingMinutes})});
             } else await req("rpc/app_admin_shared_route_save_stop",{method:"POST",body:JSON.stringify(payload)});
-            await syncSharedRouteReturn(route.route_id);
+            await recalculateSharedRouteFares(route.route_id);
             editingSharedStopId="";clearSharedStopFields();submit.textContent="Add Stop";$a("sharedStopCancelEdit").hidden=true;
             await finishSharedMutation(followingStop?"Route stop saved. Distance and travel time split evenly across both segments.":"Route stop saved.");
           }catch(err){msg("Could not save route stop: "+err.message,true);}
@@ -10359,6 +10427,26 @@
             await finishSharedMutation("Route fare saved for every operator.");
           }catch(err){msg("Could not save fare: "+err.message,true);}
           finally{submit.disabled=false;}
+        });
+        if ($a("saveSharedFareMatrix")) $a("saveSharedFareMatrix").addEventListener("click", async () => {
+          const button = $a("saveSharedFareMatrix");
+          const route = selectedSharedRoute("sharedFareRoute");
+          const boarding = $a("sharedFareBoarding")?.value;
+          const dropping = $a("sharedFareDropping")?.value;
+          if (!route || !boarding || !dropping) { msg("Choose a route, boarding stop, and destination stop first.", true); return; }
+          const fares = {};
+          for (const [, id, key] of sharedFareMatrixFields) {
+            const amount = Number($a(id)?.value);
+            if (!Number.isFinite(amount) || amount < 10 || amount % 10 !== 0) { msg("Every fare must be at least ₹10 and a multiple of ₹10.", true); return; }
+            fares[key] = amount;
+          }
+          button.disabled = true;
+          try {
+            await req("rpc/app_admin_save_shared_route_fare_matrix", {method:"POST",body:JSON.stringify({p_route_id:route.route_id,p_boarding_stop_id:boarding,p_dropping_stop_id:dropping,p_fares:fares})});
+            await loadSharedFares();
+            msg("All four category fares saved; return fares and upcoming trip fares were updated too.");
+          } catch (error) { msg("Could not save fare matrix: " + error.message, true); }
+          finally { button.disabled = false; }
         });
         const list = (id, rows, render) => {
           const el = $a(id);
