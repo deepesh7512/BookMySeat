@@ -10539,13 +10539,22 @@
             del.textContent = "Delete";
             del.onclick = async () => {
               if (
-                !confirm(
-                  "Delete this record? The database may block deletion if related bookings or records exist.",
-                )
+                !confirm(id === "currentBuses"
+                  ? "Remove this bus from the active fleet? Existing trips, bookings and tickets will be preserved."
+                  : "Delete this record? The database may block deletion if related bookings or records exist.")
               )
                 return;
               del.disabled = true;
               try {
+                if (id === "currentBuses") {
+                  await req("rpc/app_admin_delete_bus", {
+                    method: "POST",
+                    body: JSON.stringify({ p_bus_id: x.id }),
+                  });
+                  msg("Bus removed from the active fleet. Existing trips and tickets were preserved.");
+                  await loadAll();
+                  return;
+                }
                 const tableName = {
                   currentOperators: "app_operators",
                   currentBuses: "app_buses",
@@ -10574,8 +10583,8 @@
           const queryFor = () => {
             const queries = {
               currentOperators: "app_operators?select=id,operator_name,phone,email,active&order=operator_name",
-              currentBuses: "app_buses?select=id,operator_id,bus_name,bus_number,bus_type,seat_layout,total_seats,active&order=bus_name",
-              currentRoutes: "app_routes?select=id,bus_id,route_name,fare_type,active&order=route_name",
+              currentBuses: "app_buses?select=id,operator_id,bus_name,bus_number,bus_type,seat_layout,total_seats,active&active=eq.true&order=bus_name",
+              currentRoutes: "app_routes?select=id,bus_id,route_name,fare_type,active&active=eq.true&order=route_name",
               currentRouteStops: "app_route_stops?select=id,route_id,shared_stop_id,stop_order,stop_name,arrival_time,departure_time,distance_km,segment_minutes&order=stop_order",
               currentTripsAdmin: "app_trips?select=id,route_id,bus_id,journey_date,status&order=journey_date.desc",
             };
@@ -10677,10 +10686,10 @@
                 "app_operators?select=id,operator_name,phone,email,active&order=operator_name&limit=10",
               ),
               req(
-                "app_buses?select=id,operator_id,bus_name,bus_number,bus_type,seat_layout,total_seats,active&order=bus_name&limit=10",
+                "app_buses?select=id,operator_id,bus_name,bus_number,bus_type,seat_layout,total_seats,active&active=eq.true&order=bus_name&limit=10",
               ),
               req(
-                "app_routes?select=id,bus_id,route_name,fare_type,active&order=route_name&limit=10",
+                "app_routes?select=id,bus_id,route_name,fare_type,active&active=eq.true&order=route_name&limit=10",
               ),
               req(
                 "app_route_stops?select=id,route_id,shared_stop_id,stop_order,stop_name,arrival_time,departure_time,distance_km,segment_minutes&order=stop_order&limit=10",
@@ -10697,17 +10706,16 @@
 
             setOverviewStat("overviewOperators", operators.length);
             setOverviewStat("overviewBuses", buses.length);
-            setOverviewStat("overviewRoutes", routes.length);
+            setOverviewStat("overviewRoutes", "—");
             setOverviewStat("overviewTrips", trips.length);
             const countTables = [
               ["overviewOperators", "app_operators"],
               ["overviewBuses", "app_buses"],
-              ["overviewRoutes", "app_routes"],
               ["overviewTrips", "app_trips"],
             ];
             const countResults = await Promise.allSettled(
               countTables.map(([, table]) =>
-                req(table + "?select=id", {
+                req(table + "?select=id" + (table === "app_buses" ? "&active=eq.true" : ""), {
                   method: "HEAD",
                   includeHeaders: true,
                   headers: {
@@ -10724,6 +10732,17 @@
               const count = Number(countText);
               if (Number.isFinite(count)) setOverviewStat(countTables[index][0], count);
             });
+
+            try {
+              const catalog = await req("rpc/app_shared_route_catalog", { method: "POST", body: "{}" });
+              const routePairs = (Array.isArray(catalog) ? catalog : []).filter((route) =>
+                !route.return_route_id || String(route.route_id).localeCompare(String(route.return_route_id)) < 0,
+              );
+              setOverviewStat("overviewRoutes", routePairs.length);
+            } catch (routeCountError) {
+              console.warn("Could not load shared route count", routeCountError);
+              setOverviewStat("overviewRoutes", "—");
+            }
 
             try {
               const today = new Date().toLocaleDateString("en-CA", {
