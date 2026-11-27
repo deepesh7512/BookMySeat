@@ -1662,6 +1662,13 @@
         cursor: pointer;
       }
 
+      .admin-nav-group,
+      .admin-nav-group-items {
+        display: contents;
+      }
+      .admin-nav-group > summary {
+        display: none;
+      }
       .admin-nav-btn:hover,
       .admin-nav-btn.active {
         background: #b91c1c;
@@ -1783,36 +1790,66 @@
 
         .admin-sidebar {
           position: static;
-          display: grid;
-          grid-auto-flow: column;
-          grid-template-rows: repeat(2, minmax(32px, auto));
-          grid-auto-columns: max-content;
+          display: block;
           width: 100%;
-          max-height: 78px;
+          max-height: none;
           box-sizing: border-box;
-          gap: 4px;
-          overflow-x: auto;
-          overflow-y: hidden;
-          padding: 7px;
-          scroll-snap-type: x proximity;
+          overflow: visible;
+          padding: 8px;
         }
 
         .admin-sidebar-title {
           display: none;
         }
 
-        .admin-nav-btn {
-          width: auto;
-          min-width: max-content;
-          min-height: 32px;
-          margin: 0;
-          padding: 6px 9px;
-          gap: 6px;
-          border-radius: 10px;
+        .admin-nav-group {
+          display: block;
+          margin: 0 0 6px;
+          overflow: hidden;
+          border: 1px solid #354257;
+          border-radius: 11px;
+          background: #263448;
+        }
+        .admin-nav-group > summary {
+          display: flex;
+          min-height: 36px;
+          align-items: center;
+          justify-content: space-between;
+          padding: 7px 11px;
+          color: #f1f5f9;
           font-size: 12px;
+          font-weight: 750;
+          cursor: pointer;
+          list-style: none;
+        }
+        .admin-nav-group > summary::-webkit-details-marker { display: none; }
+        .admin-nav-group > summary::after {
+          content: "+";
+          color: #cbd5e1;
+          font-size: 16px;
+          line-height: 1;
+        }
+        .admin-nav-group[open] > summary::after { content: "−"; }
+        .admin-nav-group-items {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 4px;
+          padding: 4px;
+          border-top: 1px solid #354257;
+        }
+        .admin-nav-group:not([open]) > .admin-nav-group-items { display: none; }
+        .admin-nav-btn {
+          width: 100%;
+          min-width: 0;
+          min-height: 34px;
+          margin: 0;
+          padding: 7px 8px;
+          gap: 5px;
+          border-radius: 8px;
+          font-size: 11px;
           line-height: 1.2;
-          white-space: nowrap;
-          scroll-snap-align: start;
+          text-align: left;
+          white-space: normal;
         }
 
         .admin-content {
@@ -5293,20 +5330,49 @@
               <small style="display:block;font-size:11px;font-weight:400;margin-top:5px;">ADMIN PANEL</small>
             </div>
 
-            <button type="button" class="admin-nav-btn active" data-admin-target="overview">🏠 Overview</button>
-            <button type="button" class="admin-nav-btn" data-admin-target="operator-requests">📝 Operator Requests</button>
-            <button type="button" class="admin-nav-btn" data-admin-target="routes">🛣️ Routes</button>
-            <button type="button" class="admin-nav-btn" data-admin-target="stops">📍 Stops</button>
-            <button type="button" class="admin-nav-btn" data-admin-target="route-fares">💰 Fares</button>
-            <button type="button" class="admin-nav-btn" data-admin-target="operators">👥 Operators</button>
-            <button type="button" class="admin-nav-btn" data-admin-target="buses">🚌 Buses</button>
-            <button type="button" class="admin-nav-btn" data-admin-target="trips">📅 Trips</button>
-            <button type="button" class="admin-nav-btn" data-admin-target="bookings">🎫 All Bookings</button>
-            <button type="button" class="admin-nav-btn" data-admin-target="reports">📊 Reports</button>
-            <button type="button" class="admin-nav-btn" data-admin-target="notifications">🔔 Notifications</button>
-            <button type="button" class="admin-nav-btn" data-admin-target="home-promo">🎨 Promos &amp; Offers</button>
-            <button type="button" class="admin-nav-btn" data-admin-target="booking-delete">🗑️ Booking Delete</button>
-            <button type="button" class="admin-nav-btn" data-admin-target="backup">💾 Backup</button>
+            <details class="admin-nav-group" open>
+              <summary>Dashboard</summary>
+              <div class="admin-nav-group-items">
+                <button type="button" class="admin-nav-btn active" data-admin-target="overview">🏠 Overview</button>
+                <button type="button" class="admin-nav-btn" data-admin-target="operator-requests">📝 Operator Requests</button>
+              </div>
+            </details>
+
+            <details class="admin-nav-group">
+              <summary>Route setup</summary>
+              <div class="admin-nav-group-items">
+                <button type="button" class="admin-nav-btn" data-admin-target="routes">🛣️ Routes</button>
+                <button type="button" class="admin-nav-btn" data-admin-target="stops">📍 Stops</button>
+                <button type="button" class="admin-nav-btn" data-admin-target="route-fares">💰 Fares</button>
+              </div>
+            </details>
+
+            <details class="admin-nav-group">
+              <summary>Fleet management</summary>
+              <div class="admin-nav-group-items">
+                <button type="button" class="admin-nav-btn" data-admin-target="operators">👥 Operators</button>
+                <button type="button" class="admin-nav-btn" data-admin-target="buses">🚌 Buses</button>
+              </div>
+            </details>
+
+            <details class="admin-nav-group">
+              <summary>Trips &amp; bookings</summary>
+              <div class="admin-nav-group-items">
+                <button type="button" class="admin-nav-btn" data-admin-target="trips">📅 Trips</button>
+                <button type="button" class="admin-nav-btn" data-admin-target="bookings">🎫 All Bookings</button>
+              </div>
+            </details>
+
+            <details class="admin-nav-group">
+              <summary>Reports &amp; tools</summary>
+              <div class="admin-nav-group-items">
+                <button type="button" class="admin-nav-btn" data-admin-target="reports">📊 Reports</button>
+                <button type="button" class="admin-nav-btn" data-admin-target="notifications">🔔 Notifications</button>
+                <button type="button" class="admin-nav-btn" data-admin-target="home-promo">🎨 Promos &amp; Offers</button>
+                <button type="button" class="admin-nav-btn" data-admin-target="booking-delete">🗑️ Booking Delete</button>
+                <button type="button" class="admin-nav-btn" data-admin-target="backup">💾 Backup</button>
+              </div>
+            </details>
           </aside>
           
           <div class="admin-content">
@@ -11532,6 +11598,15 @@ if (recentContainer) {
 
         /* ADMIN SIDEBAR NAVIGATION */
         const adminNavButtons = document.querySelectorAll(".admin-nav-btn");
+        const adminNavGroups = [...document.querySelectorAll(".admin-nav-group")];
+        const adminNavMobileQuery = window.matchMedia("(max-width: 760px)");
+        const syncAdminNavGroups = () => {
+          adminNavGroups.forEach((group, index) => {
+            group.open = !adminNavMobileQuery.matches || index === 0;
+          });
+        };
+        syncAdminNavGroups();
+        adminNavMobileQuery.addEventListener("change", syncAdminNavGroups);
         const adminViews = document.querySelectorAll(".admin-section-view");
         $a("refreshOperatorRouteRequests")?.addEventListener("click", loadOperatorRouteChangeRequests);
 
