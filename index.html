@@ -1783,12 +1783,18 @@
 
         .admin-sidebar {
           position: static;
-          display: flex;
+          display: grid;
+          grid-auto-flow: column;
+          grid-template-rows: repeat(2, minmax(32px, auto));
+          grid-auto-columns: max-content;
           width: 100%;
+          max-height: 78px;
           box-sizing: border-box;
-          gap: 6px;
+          gap: 4px;
           overflow-x: auto;
-          padding: 10px;
+          overflow-y: hidden;
+          padding: 7px;
+          scroll-snap-type: x proximity;
         }
 
         .admin-sidebar-title {
@@ -1798,8 +1804,15 @@
         .admin-nav-btn {
           width: auto;
           min-width: max-content;
+          min-height: 32px;
           margin: 0;
-          padding: 10px 12px;
+          padding: 6px 9px;
+          gap: 6px;
+          border-radius: 10px;
+          font-size: 12px;
+          line-height: 1.2;
+          white-space: nowrap;
+          scroll-snap-align: start;
         }
 
         .admin-content {
